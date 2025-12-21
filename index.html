@@ -3,18 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Bingo Casino Royale - Multiplayer</title>
+    <title>Bingo Casino Royale - Easy Play</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- Top Bar -->
     <div class="top-bar">
-        <h2 style="font-size: 1.1rem;">🎰 BINGO MULTIPLAYER</h2>
+        <h2 style="font-size: 1.1rem;">🎰 BINGO EASY PLAY</h2>
         <div class="balance-card">
             <span style="color:var(--text-dim); font-size: 0.7rem;">CREDITS</span>
             <span class="balance-amount" id="balance">1,000</span>
         </div>
     </div>
 
+    <!-- Main Container -->
     <div class="container">
         <!-- Session Info -->
         <div class="session-info">
@@ -22,57 +24,105 @@
             <div class="session-timer">Status: <span id="sessionStatus">ACTIVE</span></div>
         </div>
 
+        <!-- Quick Join Section -->
+        <div class="quick-join-section">
+            <div class="section-title">
+                <span>🚀 QUICK START</span>
+                <span class="easy-mode">EASY MODE</span>
+            </div>
+            <div class="quick-join-buttons">
+                <button class="quick-join-btn primary" onclick="QuickJoinManager.quickJoin()">
+                    <span class="icon">⚡</span>
+                    <span class="text">QUICK JOIN</span>
+                    <span class="subtext">Auto-selects best number</span>
+                </button>
+                <button class="quick-join-btn secondary" onclick="QuickJoinManager.joinWithRecommended()">
+                    <span class="icon">🎯</span>
+                    <span class="text">SMART JOIN</span>
+                    <span class="subtext">Best chance to win</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Bingo Columns Guide -->
+        <div class="bingo-columns-guide">
+            <div class="column-header">
+                <div class="column-badge b-col">B<br><small>1-40</small></div>
+                <div class="column-badge i-col">I<br><small>41-80</small></div>
+                <div class="column-badge n-col">N<br><small>81-120</small></div>
+                <div class="column-badge g-col">G<br><small>121-160</small></div>
+                <div class="column-badge o-col">O<br><small>161-200</small></div>
+            </div>
+        </div>
+
         <!-- Number Selection -->
         <div class="section-title">
-            <span>Choose Center Number</span>
-            <span id="selected-label">Pick 1-200</span>
+            <span>Choose Center Number (Optional)</span>
+            <span id="selected-label">Pick 1-200 or use Quick Join</span>
         </div>
         <div class="selector-box">
             <div class="numbers-scroll" id="numberGrid"></div>
-            <div class="taken-info" id="takenInfo">Numbers in red are taken by other players</div>
+            <div class="taken-info" id="takenInfo">🟢 Available | 🔴 Taken | ⭐ Recommended</div>
         </div>
 
-        <!-- Statistics Dashboard -->
+        <!-- Stats Dashboard -->
         <div class="stats-dashboard">
             <div class="stat-box">
                 <div class="stat-value" id="activePlayers">1</div>
-                <div class="stat-label">Active Players</div>
+                <div class="stat-label">Players</div>
             </div>
             <div class="stat-box">
                 <div class="stat-value" id="totalCards">1</div>
-                <div class="stat-label">Cards Playing</div>
+                <div class="stat-label">Cards</div>
             </div>
             <div class="stat-box">
                 <div class="stat-value" id="winnersCount">0</div>
-                <div class="stat-label">Session Wins</div>
+                <div class="stat-label">Wins</div>
             </div>
         </div>
 
-        <!-- Hot Numbers Display -->
+        <!-- Hot Numbers -->
         <div class="hot-numbers-container">
             <div class="section-title">
-                <span>🔥 Hot Numbers (3h)</span>
-                <span id="hotNumbersTime">Updated now</span>
+                <span>🔥 Hot Numbers (Last Hour)</span>
+                <button class="refresh-btn" onclick="StatsManager.updateHotNumbers()">⟳</button>
             </div>
-            <div class="hot-numbers" id="hotNumbers">
-                <!-- Hot numbers will be populated by JavaScript -->
-            </div>
+            <div class="hot-numbers" id="hotNumbers"></div>
         </div>
 
         <!-- Game Dashboard -->
         <div class="dashboard">
             <div id="status-text" style="font-size: 0.8rem; color: var(--text-dim);">
-                GAME ACTIVE 
+                READY TO PLAY
                 <span id="gameStatusIndicator" class="game-status status-active">ACTIVE</span>
             </div>
-            <div class="current-ball" id="ballDisplay">--</div>
+            
+            <!-- Bingo Announcement Display -->
+            <div class="bingo-announcement">
+                <div class="letter-display" id="letterDisplay">B</div>
+                <div class="announcement-display">
+                    <div class="current-ball" id="ballDisplay">--</div>
+                    <div class="letter-info" id="letterInfo">B Column (1-40)</div>
+                </div>
+                <div class="call-number" id="callNumber">-</div>
+            </div>
+            
             <div class="progress-container">
                 <div class="progress-bar" id="progressBar" style="width: 0%"></div>
             </div>
-            <div style="font-size: 0.7rem; color: var(--primary);" id="progressText">Draw: <span id="drawCount">0</span> / 75</div>
-            <div class="speed-indicator">Draw Speed: 1 number/second</div>
+            <div style="font-size: 0.7rem; color: var(--primary);" id="progressText">
+                Draw: <span id="drawCount">0</span> / 75
+            </div>
             <div class="next-draw">Next session in: <span id="nextSessionTimer">60</span>s</div>
-            <div class="history-balls" id="historyBalls"></div>
+            
+            <!-- Recent Calls -->
+            <div class="recent-calls">
+                <div class="section-title">
+                    <span>Recent Calls</span>
+                    <span id="callCount">0 calls</span>
+                </div>
+                <div class="calls-list" id="callsList"></div>
+            </div>
         </div>
 
         <!-- Pattern Selection -->
@@ -85,26 +135,47 @@
         <!-- Bingo Card -->
         <div class="bingo-card">
             <div class="bingo-header">
-                <span>B</span><span>I</span><span>N</span><span>G</span><span>O</span>
+                <div class="bingo-letter b-col">B</div>
+                <div class="bingo-letter i-col">I</div>
+                <div class="bingo-letter n-col">N</div>
+                <div class="bingo-letter g-col">G</div>
+                <div class="bingo-letter o-col">O</div>
             </div>
             <div class="bingo-grid" id="cardGrid"></div>
         </div>
 
-        <!-- Game History Toggle -->
-        <button class="history-toggle-btn" onclick="toggleGameHistory()">
-            📜 Game History
-            <span class="history-badge" id="historyBadge">0</span>
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <button class="action-btn" onclick="toggleWagerModal()">
+                <span class="icon">💰</span>
+                <span class="text">Bet: <span id="wagerBtnLabel">50</span></span>
+            </button>
+            <button class="action-btn" onclick="UIManager.findAvailableNumber()">
+                <span class="icon">🔍</span>
+                <span class="text">Find Number</span>
+            </button>
+            <button class="action-btn" onclick="UIManager.resetPlayerGame()">
+                <span class="icon">🔄</span>
+                <span class="text">Leave</span>
+            </button>
+        </div>
+
+        <!-- Main Join Button -->
+        <button class="main-join-btn" id="startBtn" onclick="UIManager.joinSession()">
+            <span class="join-icon">🎮</span>
+            <span class="join-text">JOIN GAME</span>
+            <span class="join-subtext">Click or use Quick Join above</span>
         </button>
 
-        <!-- Controls -->
-        <div class="controls">
-            <button class="main-btn btn-secondary" onclick="toggleWagerModal()">💰 Bet: <span id="wagerBtnLabel">50</span></button>
-            <button class="main-btn btn-secondary" onclick="resetPlayerGame()">🔄 Leave Game</button>
-            <button class="main-btn btn-play" id="startBtn" onclick="joinSession()">JOIN SESSION</button>
-        </div>
+        <!-- Game History -->
+        <button class="history-btn" onclick="toggleGameHistory()">
+            <span class="icon">📜</span>
+            Game History
+            <span class="history-badge" id="historyBadge">0</span>
+        </button>
     </div>
 
-    <!-- Wager Modal -->
+    <!-- Modals -->
     <div class="modal" id="wagerModal">
         <div class="modal-content">
             <h3>Select Wager</h3>
@@ -118,158 +189,143 @@
             <div style="font-size: 0.8rem; color: var(--text-dim); margin: 10px 0;">
                 Min: 10 | Max: 500 | Balance: <span id="modalBalance">1000</span>
             </div>
-            <button class="main-btn btn-play" onclick="toggleWagerModal()">CONFIRM</button>
+            <button class="main-btn" onclick="toggleWagerModal()">CONFIRM</button>
         </div>
     </div>
 
     <!-- Win Modal -->
     <div class="modal" id="winModal">
         <div class="modal-content win">
-            <h2 style="color: var(--secondary); margin-bottom: 15px;">🎉 BINGO! YOU WIN! 🎉</h2>
-            <div style="font-size: 3rem; color: var(--accent); margin: 20px 0;" id="winAmount">+250</div>
-            <div style="color: var(--text-dim); margin-bottom: 20px;">
-                Pattern: <span id="winPattern">LINE</span><br>
-                Draws: <span id="winDraws">25</span> / 75<br>
-                Wager: <span id="winWager">50</span> credits
+            <h2>🎉 BINGO! YOU WIN! 🎉</h2>
+            <div class="win-amount" id="winAmount">+250</div>
+            <div class="win-details">
+                <div>Pattern: <span id="winPattern">LINE</span></div>
+                <div>Draws: <span id="winDraws">25</span> / 75</div>
+                <div>Wager: <span id="winWager">50</span> credits</div>
             </div>
-            <button class="main-btn btn-play" onclick="closeWinModal()">JOIN NEXT SESSION</button>
+            <button class="main-btn" onclick="closeWinModal()">PLAY AGAIN</button>
         </div>
     </div>
 
     <!-- Lose Modal -->
     <div class="modal" id="loseModal">
         <div class="modal-content lose">
-            <h2 style="color: var(--danger); margin-bottom: 15px;">😔 SESSION ENDED</h2>
-            <div style="font-size: 2rem; color: var(--danger); margin: 20px 0;" id="loseAmount">-50</div>
-            <div style="color: var(--text-dim); margin-bottom: 20px;">
+            <h2>😔 GAME OVER</h2>
+            <div class="lose-amount" id="loseAmount">-50</div>
+            <div class="lose-details">
                 No bingo pattern completed<br>
                 75 draws reached
             </div>
-            <button class="main-btn btn-play" onclick="closeLoseModal()">JOIN NEXT SESSION</button>
+            <button class="main-btn" onclick="closeLoseModal()">TRY AGAIN</button>
         </div>
     </div>
 
-    <!-- Waiting Modal -->
-    <div class="modal" id="waitingModal">
-        <div class="modal-content waiting">
-            <h2 style="color: var(--accent); margin-bottom: 15px;">⏳ WAITING FOR NEXT SESSION</h2>
-            <div style="font-size: 4rem; color: var(--accent); margin: 20px 0;" id="waitingTimer">60</div>
-            <div style="color: var(--text-dim); margin-bottom: 20px;">
-                Next session starts in <span id="waitingSeconds">60</span> seconds<br>
-                Get ready to choose a new number!
+    <!-- Quick Join Modal -->
+    <div class="modal" id="quickJoinModal">
+        <div class="modal-content quick-join">
+            <h2>⚡ QUICK JOIN</h2>
+            <div class="quick-join-details">
+                <div class="detail">
+                    <span>Selected Number:</span>
+                    <span class="highlight" id="quickJoinNumber">47</span>
+                </div>
+                <div class="detail">
+                    <span>Pattern:</span>
+                    <span id="quickJoinPattern">LINE</span>
+                </div>
+                <div class="detail">
+                    <span>Wager:</span>
+                    <span id="quickJoinWager">50</span> credits
+                </div>
+                <div class="detail">
+                    <span>Win Chance:</span>
+                    <span class="chance" id="quickJoinChance">Good</span>
+                </div>
             </div>
-            <div style="font-size: 0.9rem; color: var(--text-dim);">
-                Previous session winners: <span id="previousWinners">0</span>
-            </div>
+            <button class="main-btn confirm" onclick="QuickJoinManager.confirmQuickJoin()">JOIN NOW</button>
+            <button class="secondary-btn" onclick="closeQuickJoinModal()">CANCEL</button>
         </div>
     </div>
 
-    <!-- Game History Modal -->
+    <!-- History Modal -->
     <div class="modal" id="historyModal">
-        <div class="modal-content history-modal">
-            <h2 style="color: var(--primary); margin-bottom: 15px;">📜 GAME HISTORY</h2>
-            <div class="history-tabs">
-                <button class="history-tab active" onclick="switchHistoryTab('winners')">🏆 Winners</button>
-                <button class="history-tab" onclick="switchHistoryTab('numbers')">🔢 Hot Numbers</button>
-                <button class="history-tab" onclick="switchHistoryTab('stats')">📊 Statistics</button>
+        <div class="modal-content history">
+            <h2>📜 GAME HISTORY</h2>
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('winners')">🏆 Winners</button>
+                <button class="tab" onclick="switchTab('stats')">📊 Stats</button>
+                <button class="tab" onclick="switchTab('numbers')">🔢 Numbers</button>
             </div>
-            
-            <div class="history-content" id="winnersTab">
-                <div class="winners-list" id="winnersList">
-                    <!-- Winners will be populated by JavaScript -->
-                </div>
+            <div class="tab-content" id="winnersTab">
+                <div id="winnersList">Loading...</div>
             </div>
-            
-            <div class="history-content" id="numbersTab" style="display: none;">
-                <div class="hot-numbers-analysis">
-                    <h3>🎯 Most Likely Numbers (3h)</h3>
-                    <div class="hot-numbers-grid" id="hotNumbersAnalysis">
-                        <!-- Hot numbers analysis will be populated by JavaScript -->
-                    </div>
-                    <div class="probability-info">
-                        <div class="prob-item">
-                            <span class="prob-label">Next Number Probability:</span>
-                            <span class="prob-value" id="nextNumberProb">15.2%</span>
-                        </div>
-                        <div class="prob-item">
-                            <span class="prob-label">Average Draws to Win:</span>
-                            <span class="prob-value" id="avgDrawsWin">32.5</span>
-                        </div>
-                    </div>
-                </div>
+            <div class="tab-content" id="statsTab" style="display:none;">
+                <div id="statsContent">Loading...</div>
             </div>
-            
-            <div class="history-content" id="statsTab" style="display: none;">
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-card-value" id="totalGames">0</div>
-                        <div class="stat-card-label">Total Games</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-card-value" id="totalWins">0</div>
-                        <div class="stat-card-label">Total Wins</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-card-value" id="winRate">0%</div>
-                        <div class="stat-card-label">Win Rate</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-card-value" id="totalWagered">0</div>
-                        <div class="stat-card-label">Total Wagered</div>
-                    </div>
-                </div>
+            <div class="tab-content" id="numbersTab" style="display:none;">
+                <div id="numbersContent">Loading...</div>
             </div>
-            
-            <button class="main-btn btn-secondary" onclick="closeHistoryModal()">CLOSE</button>
+            <button class="main-btn" onclick="closeHistoryModal()">CLOSE</button>
         </div>
     </div>
 
-    <!-- Error Modal -->
-    <div class="modal" id="errorModal">
-        <div class="modal-content error-modal">
-            <h2 style="color: var(--danger); margin-bottom: 15px;">⚠️ ERROR</h2>
-            <div style="color: var(--text-main); margin-bottom: 20px;" id="errorMessage">
-                An error has occurred. Please try again.
-            </div>
-            <button class="main-btn btn-play" onclick="closeErrorModal()">OK</button>
-        </div>
-    </div>
-
-    <!-- Scripts -->
-    <script src="game.js"></script>
-    <script src="patterns.js"></script>
-    <script src="history.js"></script>
-    <script src="stats.js"></script>
-    <script src="multiplayer.js"></script>
-    <script src="ui.js"></script>
-    
-    <!-- Initialize Game -->
+    <!-- JavaScript Files -->
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            try {
-                GameState.initialize();
-                UIManager.init();
-                HistoryManager.init();
-                StatsManager.init();
-                MultiplayerManager.init();
-                
-                // Start the first game session
-                GameSession.start();
-                
-                // Start hot numbers updates
-                StatsManager.updateHotNumbers();
-                
-                // Load initial history
-                HistoryManager.loadHistory();
-                
-                // Start simulation
-                MultiplayerManager.startSimulation();
-                
-                console.log('Game initialized successfully');
-            } catch (error) {
-                ErrorHandler.showError(`Initialization failed: ${error.message}`);
-                console.error('Initialization error:', error);
-            }
+        // Global variables
+        window.GameState = {
+            balance: 1000,
+            wager: 50,
+            selectedCenter: null,
+            isPlaying: false,
+            hasJoinedSession: false,
+            markedCells: new Set(),
+            currentPattern: 'line',
+            cardNumbers: [],
+            sessionWon: false,
+            wagerHistory: [],
+            gameHistory: []
+        };
+
+        window.GameSession = {
+            drawnNumbers: [],
+            drawInterval: null,
+            drawCount: 0,
+            maxDraws: 75,
+            drawIntervalMs: 1000,
+            betweenGamesIntervalMs: 60000,
+            takenNumbers: new Set(),
+            activePlayers: 1,
+            totalCards: 1,
+            sessionActive: true,
+            sessionEnded: false,
+            winnersCount: 0,
+            waitingForNextSession: false,
+            nextSessionTimer: null,
+            sessionId: 1,
+            currentBall: null,
+            recentWinners: []
+        };
+    </script>
+    
+    <script src="game.js"></script>
+    <script src="ui.js"></script>
+    <script src="quickjoin.js"></script>
+    <script src="announcer.js"></script>
+    
+    <script>
+        // Initialize game
+        document.addEventListener('DOMContentLoaded', function() {
+            UIManager.init();
+            QuickJoinManager.init();
+            BingoAnnouncer.init();
+            
+            // Start game session
+            GameSession.startGameSession();
+            
+            // Update UI every second
+            setInterval(() => {
+                UIManager.updateUI();
+            }, 1000);
         });
     </script>
 </body>
