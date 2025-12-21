@@ -1,10 +1,18 @@
 // UI Manager
 class UIManager {
     static init() {
+        // Create number grid
         this.createNumberGrid();
+        
+        // Create pattern selector
         this.createPatternSelector();
-        this.setupEventListeners();
+        
+        // Initialize UI
         this.updateUI();
+        this.updateStats();
+        
+        // Set up initial state
+        this.updatePhaseUI();
     }
     
     static createNumberGrid() {
@@ -18,35 +26,28 @@ class UIManager {
             btn.id = `num-${i}`;
             
             // Color code by BINGO column
-            const letterInfo = BingoAnnouncer.getLetterForNumber(i);
-            btn.style.borderColor = letterInfo.color + '40';
+            const letter = GameManager.getLetterForNumber(i);
+            btn.style.borderLeftColor = this.getLetterColor(letter);
+            btn.style.borderLeftWidth = '3px';
             
-            btn.onclick = () => this.selectCenterNumber(i, btn);
+            btn.onclick = () => this.selectNumber(i, btn);
             grid.appendChild(btn);
         }
-        
-        this.updateTakenNumbers();
     }
     
-    static selectCenterNumber(number, button) {
-        const state = GameState.getInstance();
-        const session = GameSession;
-        
-        if (state.isPlaying) {
-            this.showNotification('Already in game! Leave first.', 'error');
-            return;
-        }
-        
-        if (!session.sessionActive) {
-            this.showNotification('Wait for next session', 'warning');
-            return;
-        }
-        
-        if (session.takenNumbers.has(number)) {
-            this.showNotification('Number already taken', 'error');
-            this.updateTakenNumbers();
-            return;
-        }
+    static getLetterColor(letter) {
+        const colors = {
+            'B': '#3b82f6',
+            'I': '#6366f1',
+            'N': '#10b981',
+            'G': '#f59e0b',
+            'O': '#ef4444'
+        };
+        return colors[letter] || '#94a3b8';
+    }
+    
+    static selectNumber(number, button) {
+        const state = GameManager.getInstance();
         
         // Clear previous selection
         document.querySelectorAll('.num-btn').forEach(btn => {
@@ -54,65 +55,15 @@ class UIManager {
         });
         
         // Select new number
-        state.selectedCenter = number;
-        button.classList.add('selected');
-        
-        // Update label
-        document.getElementById('selected-label').textContent = `Selected: ${number}`;
-        
-        // Generate card
-        this.generateCard(number);
-        
-        // Enable join button
-        document.getElementById('startBtn').disabled = false;
-        
-        this.showNotification(`Selected number ${number}`, 'success');
-    }
-    
-    static generateCard(centerNumber) {
-        const state = GameState.getInstance();
-        const grid = document.getElementById('cardGrid');
-        grid.innerHTML = '';
-        
-        const numbers = [];
-        
-        // Generate numbers around center
-        for (let i = -12; i <= 12; i++) {
-            let val = centerNumber + i;
-            if (val < 1) val = 200 + val;
-            if (val > 200) val = val - 200;
-            numbers.push(val);
+        if (GameManager.selectNumber(number)) {
+            button.classList.add('selected');
+            
+            // Show confirmation
+            document.getElementById('joinConfirm').style.display = 'block';
+            document.getElementById('cardStatus').textContent = 'Ready to Join';
+            
+            this.showNotification(`Selected number ${number}`, 'success');
         }
-        
-        state.cardNumbers = numbers;
-        
-        // Create card
-        numbers.forEach((n, index) => {
-            const cell = document.createElement('div');
-            cell.className = 'cell';
-            
-            if (index === 12) { // Center
-                cell.textContent = 'FREE';
-                cell.style.background = 'var(--accent)';
-                cell.style.color = 'white';
-                state.markedCells.add('free');
-            } else {
-                cell.textContent = n;
-                cell.dataset.val = n;
-                
-                // Color by letter
-                const letterInfo = BingoAnnouncer.getLetterForNumber(n);
-                cell.style.borderTop = `3px solid ${letterInfo.color}`;
-                
-                // Mark if already drawn
-                if (GameSession.drawnNumbers.includes(n)) {
-                    state.markedCells.add(n.toString());
-                    cell.classList.add('marked');
-                }
-            }
-            
-            grid.appendChild(cell);
-        });
     }
     
     static createPatternSelector() {
@@ -136,10 +87,10 @@ class UIManager {
     }
     
     static selectPattern(pattern, button) {
-        const state = GameState.getInstance();
+        const state = GameManager.getInstance();
         
         if (state.isPlaying) {
-            this.showNotification('Cannot change pattern while playing', 'error');
+            this.showNotification('Cannot change pattern while playing!', 'error');
             return;
         }
         
@@ -149,295 +100,255 @@ class UIManager {
         });
         
         // Set new pattern
-        state.currentPattern = pattern;
+        GameManager.setPattern(pattern);
         button.classList.add('active');
         
         // Update label
         document.getElementById('pattern-label').textContent = pattern.toUpperCase().replace('-', ' ');
         
-        this.showNotification(`Pattern: ${pattern}`, 'success');
-    }
-    
-    static updateUI() {
-        const state = GameState.getInstance();
-        const session = GameSession;
-        
-        // Update balance
-        document.getElementById('balance').textContent = state.balance.toLocaleString();
-        document.getElementById('modalWager').textContent = state.wager;
-        document.getElementById('wagerBtnLabel').textContent = state.wager;
-        document.getElementById('modalBalance').textContent = state.balance;
-        
-        // Update session info
-        document.getElementById('sessionCount').textContent = session.sessionId;
-        
-        const status = session.sessionActive ? 'ACTIVE' : 
-                     session.waitingForNextSession ? 'WAITING' : 'ENDED';
-        document.getElementById('sessionStatus').textContent = status;
-        
-        // Update game status indicator
-        const indicator = document.getElementById('gameStatusIndicator');
-        indicator.textContent = status;
-        indicator.className = `game-status status-${status.toLowerCase()}`;
-        
-        // Update progress
-        document.getElementById('drawCount').textContent = session.drawCount;
-        const progressPercent = (session.drawCount / session.maxDraws) * 100;
-        document.getElementById('progressBar').style.width = `${progressPercent}%`;
-        
-        // Update multiplayer stats
-        document.getElementById('activePlayers').textContent = session.activePlayers;
-        document.getElementById('totalCards').textContent = session.totalCards;
-        document.getElementById('winnersCount').textContent = session.winnersCount;
-        
-        // Update taken numbers
-        this.updateTakenNumbers();
-        
-        // Update start button
-        const startBtn = document.getElementById('startBtn');
-        if (startBtn) {
-            startBtn.disabled = state.isPlaying || !state.selectedCenter || !session.sessionActive;
-            startBtn.textContent = state.isPlaying ? 'PLAYING...' : 'JOIN GAME';
+        // Update confirmation if number is selected
+        if (state.selectedNumber) {
+            document.getElementById('confirmPattern').textContent = pattern.toUpperCase();
         }
         
-        // Update hot numbers
-        this.updateHotNumbers();
+        this.showNotification(`Pattern set to ${pattern}`, 'success');
     }
     
-    static updateTakenNumbers() {
-        const session = GameSession;
+    static updateCard(numbers) {
+        const grid = document.getElementById('cardGrid');
+        grid.innerHTML = '';
         
-        document.querySelectorAll('.num-btn').forEach(btn => {
-            const num = parseInt(btn.textContent);
-            if (session.takenNumbers.has(num)) {
-                btn.classList.add('taken');
-                btn.disabled = true;
-                btn.classList.remove('recommended');
+        numbers.forEach((number, index) => {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            
+            if (index === 12) { // Center
+                cell.textContent = 'FREE';
+                cell.style.background = 'var(--accent)';
+                cell.style.color = 'white';
+                cell.classList.add('marked');
             } else {
-                btn.classList.remove('taken');
-                btn.disabled = false;
+                cell.textContent = number;
+                cell.dataset.number = number;
                 
-                // Mark recommended numbers (hot numbers)
-                const isRecommended = Math.random() < 0.1; // Simplified
-                if (isRecommended) {
-                    btn.classList.add('recommended');
-                } else {
-                    btn.classList.remove('recommended');
-                }
+                // Color by letter
+                const letter = GameManager.getLetterForNumber(number);
+                cell.style.borderTop = `3px solid ${this.getLetterColor(letter)}`;
             }
+            
+            grid.appendChild(cell);
         });
     }
     
-    static updateHotNumbers() {
-        const container = document.getElementById('hotNumbers');
-        if (!container) return;
-        
-        // Generate some hot numbers (simplified)
-        const hotNumbers = [];
-        for (let i = 0; i < 8; i++) {
-            const num = Math.floor(Math.random() * 200) + 1;
-            const count = Math.floor(Math.random() * 5) + 1;
-            hotNumbers.push({ number: num, count: count });
-        }
-        
-        container.innerHTML = '';
-        hotNumbers.forEach(hot => {
-            const div = document.createElement('div');
-            div.className = 'hot-number';
-            div.textContent = hot.number;
-            div.dataset.count = hot.count;
-            container.appendChild(div);
-        });
-    }
-    
-    static updateCallHistory() {
-        const list = document.getElementById('callsList');
-        if (!list) return;
-        
-        list.innerHTML = '';
-        GameSession.callHistory.slice(0, 8).forEach(call => {
-            const item = document.createElement('div');
-            item.className = 'call-item';
-            item.innerHTML = `
-                <span style="color: ${call.color}">${call.letter}</span>
-                <span>-</span>
-                <span>${call.number}</span>
-            `;
-            list.appendChild(item);
-        });
-        
-        document.getElementById('callCount').textContent = `${GameSession.callHistory.length} calls`;
-    }
-    
-    static joinSession() {
-        const state = GameState.getInstance();
-        const session = GameSession;
-        
-        // Validate
-        if (!state.selectedCenter) {
-            this.showNotification('Select a number or use Quick Join', 'error');
-            return;
-        }
-        
-        if (!session.sessionActive) {
-            this.showNotification('Session not active', 'error');
-            return;
-        }
-        
-        if (session.takenNumbers.has(state.selectedCenter)) {
-            this.showNotification('Number already taken', 'error');
-            this.updateTakenNumbers();
-            return;
-        }
-        
-        if (state.balance < state.wager) {
-            this.showNotification('Insufficient balance', 'error');
-            return;
-        }
-        
-        // Deduct wager
-        state.balance -= state.wager;
-        
-        // Take number
-        if (!session.takeNumber(state.selectedCenter)) {
-            state.balance += state.wager; // Refund
-            this.showNotification('Failed to join', 'error');
-            return;
-        }
-        
-        // Set player state
-        state.isPlaying = true;
-        state.hasJoinedSession = true;
-        state.sessionWon = false;
-        
-        // Mark free space
-        const centerCell = document.querySelector('.cell[style*="background: var(--accent)"]');
-        if (centerCell) centerCell.classList.add('marked');
-        
-        // Mark already drawn numbers
-        const cells = document.querySelectorAll('.cell');
+    static markCardCell(number) {
+        const cells = document.querySelectorAll('.cell[data-number]');
         cells.forEach(cell => {
-            if (cell.dataset.val && session.drawnNumbers.includes(parseInt(cell.dataset.val))) {
-                state.markedCells.add(cell.dataset.val);
+            if (parseInt(cell.dataset.number) === number) {
                 cell.classList.add('marked');
             }
         });
-        
-        this.updateUI();
-        this.showNotification(`Joined with number ${state.selectedCenter}`, 'success');
     }
     
-    static checkWin() {
-        const state = GameState.getInstance();
-        if (!state.isPlaying) return;
+    static updateCallDisplay(letter, number, fullCall) {
+        // Update letter display with color
+        const letterEl = document.getElementById('callLetter');
+        letterEl.textContent = letter;
+        letterEl.className = `call-letter color-${letter.toLowerCase()}`;
+        letterEl.style.background = this.getLetterColor(letter);
         
-        const pattern = state.currentPattern;
-        const hasWon = BingoPatterns.checkPattern(pattern);
+        // Update number display
+        document.getElementById('callNumber').textContent = number;
+        document.getElementById('callFull').textContent = fullCall;
         
-        if (hasWon) {
-            this.processWin();
+        // Add to call history
+        this.addToCallHistory(fullCall, letter);
+    }
+    
+    static addToCallHistory(call, letter) {
+        const container = document.getElementById('callHistory');
+        const item = document.createElement('div');
+        item.className = 'call-item';
+        item.innerHTML = `
+            <span style="color: ${this.getLetterColor(letter)}; font-weight: bold">${call}</span>
+        `;
+        
+        container.insertBefore(item, container.firstChild);
+        
+        // Keep only last 8 calls
+        if (container.children.length > 8) {
+            container.removeChild(container.lastChild);
+        }
+        
+        // Update history modal
+        this.updateHistoryCalls();
+    }
+    
+    static updateHistoryCalls() {
+        const state = GameManager.getInstance();
+        const container = document.getElementById('historyCalls');
+        
+        if (!container) return;
+        
+        container.innerHTML = '';
+        state.callHistory.slice(0, 15).forEach(call => {
+            const item = document.createElement('div');
+            item.className = 'history-item';
+            item.innerHTML = `
+                <span style="color: ${this.getLetterColor(call.letter)}; font-weight: bold">
+                    ${call.call}
+                </span>
+                <span style="color: var(--text-dim); font-size: 0.8rem">
+                    ${this.formatTimeAgo(call.timestamp)}
+                </span>
+            `;
+            container.appendChild(item);
+        });
+    }
+    
+    static formatTimeAgo(timestamp) {
+        const seconds = Math.floor((Date.now() - timestamp) / 1000);
+        
+        if (seconds < 60) return 'just now';
+        if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+        if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+        return `${Math.floor(seconds / 86400)}d ago`;
+    }
+    
+    static updateProgress() {
+        const state = GameManager.getInstance();
+        const progress = (state.drawsCompleted / state.maxDraws) * 100;
+        
+        document.getElementById('progressBar').style.width = `${progress}%`;
+        document.getElementById('progressText').textContent = `${state.drawsCompleted} / ${state.maxDraws}`;
+    }
+    
+    static updateStats() {
+        const state = GameManager.getInstance();
+        
+        // Update main stats
+        document.getElementById('activePlayers').textContent = state.activePlayers;
+        document.getElementById('totalCards').textContent = state.takenNumbers.size;
+        document.getElementById('winnersCount').textContent = state.winners.length;
+        
+        // Update mini stats
+        document.getElementById('sessionNumber').textContent = state.currentSession;
+        document.getElementById('drawsCount').textContent = state.drawsCompleted;
+        document.getElementById('winsMini').textContent = state.winners.length;
+        
+        // Update balance
+        document.getElementById('balance').textContent = state.balance.toLocaleString();
+        document.getElementById('modalBalance').textContent = state.balance;
+    }
+    
+    static updateUI() {
+        const state = GameManager.getInstance();
+        
+        // Update wager displays
+        document.getElementById('wagerBtnLabel').textContent = state.wager;
+        document.getElementById('modalWager').textContent = state.wager;
+        
+        // Update card status
+        if (state.isPlaying) {
+            document.getElementById('cardStatus').textContent = 'Playing';
+            document.getElementById('cardStatus').style.color = 'var(--secondary)';
+        } else if (state.selectedNumber) {
+            document.getElementById('cardStatus').textContent = 'Ready to Join';
+            document.getElementById('cardStatus').style.color = 'var(--accent)';
+        } else {
+            document.getElementById('cardStatus').textContent = 'Not Joined';
+            document.getElementById('cardStatus').style.color = 'var(--text-dim)';
+        }
+        
+        // Update taken numbers
+        this.updateTakenNumbers();
+    }
+    
+    static updateTakenNumbers() {
+        const state = GameManager.getInstance();
+        
+        document.querySelectorAll('.num-btn').forEach(btn => {
+            const num = parseInt(btn.textContent);
+            if (state.takenNumbers.has(num)) {
+                btn.classList.add('taken');
+                btn.disabled = true;
+            } else {
+                btn.classList.remove('taken');
+                btn.disabled = false;
+            }
+        });
+    }
+    
+    static updatePhaseUI() {
+        const state = GameManager.getInstance();
+        
+        // Update phase-specific UI
+        if (state.currentPhase === 'drawing') {
+            // Disable pattern buttons
+            document.querySelectorAll('.pattern-btn').forEach(btn => {
+                btn.disabled = true;
+            });
+            
+            // Update status text
+            document.getElementById('status-text').textContent = 'DRAWING IN PROGRESS';
+            document.getElementById('status-text').style.color = 'var(--danger)';
+            
+        } else { // picking phase
+            // Enable pattern buttons
+            document.querySelectorAll('.pattern-btn').forEach(btn => {
+                btn.disabled = false;
+            });
+            
+            // Update status text
+            document.getElementById('status-text').textContent = 'JOIN PHASE ACTIVE';
+            document.getElementById('status-text').style.color = 'var(--secondary)';
         }
     }
     
-    static processWin() {
-        const state = GameState.getInstance();
-        const session = GameSession;
+    static showWinModal(winnings) {
+        const state = GameManager.getInstance();
         
-        state.sessionWon = true;
-        state.isPlaying = false;
-        state.hasJoinedSession = false;
-        
-        // Calculate winnings
-        const multipliers = {
-            'line': 5,
-            'four-corners': 3,
-            'full-house': 10,
-            'x': 7,
-            'blackout': 15
-        };
-        
-        const multiplier = multipliers[state.currentPattern] || 5;
-        const winnings = state.wager * multiplier;
-        
-        // Add winnings
-        state.balance += winnings;
-        
-        // Release number
-        session.releaseNumber(state.selectedCenter);
-        
-        // Show win modal
         document.getElementById('winAmount').textContent = `+${winnings}`;
-        document.getElementById('winPattern').textContent = state.currentPattern.toUpperCase();
-        document.getElementById('winDraws').textContent = session.drawCount;
+        document.getElementById('winPattern').textContent = state.pattern.toUpperCase();
+        document.getElementById('winCalls').textContent = state.drawsCompleted;
         document.getElementById('winWager').textContent = state.wager;
         document.getElementById('winModal').classList.add('active');
-        
-        this.updateUI();
-        this.showNotification(`BINGO! You won ${winnings} credits!`, 'success');
     }
     
-    static findAvailableNumber() {
-        const session = GameSession;
+    static showLoseModal() {
+        const state = GameManager.getInstance();
         
-        // Find first available number
-        for (let i = 1; i <= 200; i++) {
-            if (!session.takenNumbers.has(i)) {
-                const btn = document.getElementById(`num-${i}`);
-                if (btn) {
-                    this.selectCenterNumber(i, btn);
-                    
-                    // Scroll to the number
-                    btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    btn.classList.add('pulse');
-                    setTimeout(() => btn.classList.remove('pulse'), 1000);
-                    
-                    this.showNotification(`Found available number: ${i}`, 'success');
-                    return;
-                }
-            }
-        }
-        
-        this.showNotification('No numbers available', 'error');
+        document.getElementById('loseAmount').textContent = `-${state.wager}`;
+        document.getElementById('loseModal').classList.add('active');
     }
     
-    static resetPlayerGame() {
-        const state = GameState.getInstance();
-        const session = GameSession;
-        
-        if (state.isPlaying && !confirm('Leave game? Your wager will be lost.')) {
-            return;
-        }
-        
-        if (state.isPlaying) {
-            session.releaseNumber(state.selectedCenter);
-        }
-        
-        state.isPlaying = false;
-        state.hasJoinedSession = false;
-        state.selectedCenter = null;
-        state.markedCells.clear();
-        
-        // Clear selection
-        document.querySelectorAll('.num-btn').forEach(btn => {
-            btn.classList.remove('selected');
-        });
-        
-        // Clear marked cells
-        document.querySelectorAll('.cell').forEach(cell => {
-            cell.classList.remove('marked');
-        });
-        
-        this.updateUI();
-        this.showNotification('Left the game', 'info');
+    static showJoinPhaseModal() {
+        document.getElementById('joinPhaseModal').classList.add('active');
+    }
+    
+    static closeJoinPhaseModal() {
+        document.getElementById('joinPhaseModal').classList.remove('active');
     }
     
     static showNotification(message, type = 'info') {
-        // Create notification
+        // Create notification element
         const notification = document.createElement('div');
         notification.className = `notification ${type}`;
         notification.textContent = message;
+        notification.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: ${type === 'error' ? 'var(--danger)' : type === 'success' ? 'var(--secondary)' : 'var(--primary)'};
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            z-index: 1001;
+            animation: slideIn 0.3s ease-out;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        `;
         
-        // Add to document
         document.body.appendChild(notification);
         
         // Remove after 3 seconds
@@ -451,36 +362,6 @@ class UIManager {
             }, 300);
         }, 3000);
     }
-    
-    static setupEventListeners() {
-        // Wager modal
-        const wagerModal = document.getElementById('wagerModal');
-        wagerModal.addEventListener('click', (e) => {
-            if (e.target === wagerModal) {
-                this.toggleWagerModal();
-            }
-        });
-        
-        // Quick join modal
-        const quickJoinModal = document.getElementById('quickJoinModal');
-        if (quickJoinModal) {
-            quickJoinModal.addEventListener('click', (e) => {
-                if (e.target === quickJoinModal) {
-                    this.closeQuickJoinModal();
-                }
-            });
-        }
-        
-        // History modal
-        const historyModal = document.getElementById('historyModal');
-        if (historyModal) {
-            historyModal.addEventListener('click', (e) => {
-                if (e.target === historyModal) {
-                    this.closeHistoryModal();
-                }
-            });
-        }
-    }
 }
 
 // Global functions for HTML onclick
@@ -490,39 +371,67 @@ function toggleWagerModal() {
 }
 
 function changeWager(amount) {
-    const state = GameState.getInstance();
+    const state = GameManager.getInstance();
     const newWager = state.wager + amount;
     
-    if (newWager < 10 || newWager > 500) {
-        UIManager.showNotification('Wager must be 10-500', 'error');
-        return;
+    if (GameManager.setWager(newWager)) {
+        UIManager.updateUI();
+        UIManager.showNotification(`Wager set to ${newWager}`, 'success');
+    } else {
+        UIManager.showNotification('Invalid wager amount!', 'error');
     }
+}
+
+function prepareForNextSession() {
+    const state = GameManager.getInstance();
     
-    if (newWager > state.balance) {
-        UIManager.showNotification('Cannot exceed balance', 'error');
-        return;
+    if (state.currentPhase === 'drawing') {
+        UIManager.showNotification('Prepare your number for the next join phase!', 'info');
+        
+        // Scroll to number selection
+        document.querySelector('.selector-box').scrollIntoView({ behavior: 'smooth' });
+    } else {
+        UIManager.showNotification('Join phase is active! Pick your number now.', 'success');
     }
+}
+
+function joinNextSession() {
+    if (GameManager.joinNextSession()) {
+        // Success - button will be disabled by game logic
+    }
+}
+
+function confirmJoin() {
+    joinNextSession();
+}
+
+function cancelJoin() {
+    const state = GameManager.getInstance();
+    state.selectedNumber = null;
+    document.getElementById('joinConfirm').style.display = 'none';
+    document.getElementById('cardStatus').textContent = 'Not Joined';
     
-    state.wager = newWager;
-    UIManager.updateUI();
-    UIManager.showNotification(`Wager set to ${newWager}`, 'success');
+    // Clear selection
+    document.querySelectorAll('.num-btn').forEach(btn => {
+        btn.classList.remove('selected');
+    });
+    
+    UIManager.showNotification('Join cancelled', 'info');
 }
 
 function closeWinModal() {
     document.getElementById('winModal').classList.remove('active');
-    const state = GameState.getInstance();
-    state.selectedCenter = null;
-    UIManager.updateUI();
 }
 
 function closeLoseModal() {
     document.getElementById('loseModal').classList.remove('active');
-    const state = GameState.getInstance();
-    state.selectedCenter = null;
-    UIManager.updateUI();
 }
 
-function toggleGameHistory() {
+function showGameHistory() {
+    // Update history data
+    UIManager.updateHistoryCalls();
+    
+    // Show modal
     document.getElementById('historyModal').classList.add('active');
 }
 
@@ -530,26 +439,5 @@ function closeHistoryModal() {
     document.getElementById('historyModal').classList.remove('active');
 }
 
-function switchTab(tabName) {
-    // Hide all tabs
-    ['winnersTab', 'statsTab', 'numbersTab'].forEach(id => {
-        document.getElementById(id).style.display = 'none';
-    });
-    
-    // Remove active class
-    document.querySelectorAll('.tab').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    
-    // Show selected tab
-    document.getElementById(`${tabName}Tab`).style.display = 'block';
-    
-    // Activate tab button
-    document.querySelectorAll('.tab').forEach(tab => {
-        if (tab.textContent.includes(tabName.charAt(0).toUpperCase())) {
-            tab.classList.add('active');
-        }
-    });
-}
-
+// Make UIManager globally available
 window.UIManager = UIManager;
