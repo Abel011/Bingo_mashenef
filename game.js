@@ -2,144 +2,23 @@
 class GameState {
     static instance = null;
     
-    constructor() {
-        this.balance = 1000;
-        this.wager = 50;
-        this.selectedCenter = null;
-        this.isPlaying = false;
-        this.hasJoinedSession = false;
-        this.markedCells = new Set();
-        this.currentPattern = 'line';
-        this.cardNumbers = [];
-        this.sessionWon = false;
-        this.wagerHistory = [];
-        this.gameHistory = [];
-        this.errorCount = 0;
-    }
-    
     static getInstance() {
         if (!GameState.instance) {
-            GameState.instance = new GameState();
+            GameState.instance = {
+                balance: 1000,
+                wager: 50,
+                selectedCenter: null,
+                isPlaying: false,
+                hasJoinedSession: false,
+                markedCells: new Set(),
+                currentPattern: 'line',
+                cardNumbers: [],
+                sessionWon: false,
+                wagerHistory: [],
+                gameHistory: []
+            };
         }
         return GameState.instance;
-    }
-    
-    static initialize() {
-        const state = GameState.getInstance();
-        state.reset();
-        console.log('GameState initialized');
-    }
-    
-    reset() {
-        this.selectedCenter = null;
-        this.isPlaying = false;
-        this.hasJoinedSession = false;
-        this.markedCells.clear();
-        this.sessionWon = false;
-        this.cardNumbers = [];
-    }
-    
-    updateBalance(amount) {
-        if (typeof amount !== 'number') {
-            throw new Error('Invalid amount type');
-        }
-        
-        const oldBalance = this.balance;
-        this.balance += amount;
-        
-        // Log balance change
-        console.log(`Balance updated: ${oldBalance} -> ${this.balance} (${amount >= 0 ? '+' : ''}${amount})`);
-        
-        // Validate balance
-        if (this.balance < 0) {
-            this.balance = 0;
-            console.warn('Balance negative, reset to 0');
-        }
-        
-        // Update history
-        this.wagerHistory.push({
-            timestamp: Date.now(),
-            amount: amount,
-            type: amount >= 0 ? 'win' : 'loss',
-            balanceBefore: oldBalance,
-            balanceAfter: this.balance
-        });
-        
-        // Keep only last 100 entries
-        if (this.wagerHistory.length > 100) {
-            this.wagerHistory.shift();
-        }
-        
-        return this.balance;
-    }
-    
-    canPlaceWager() {
-        if (this.balance < this.wager) {
-            return { success: false, reason: 'Insufficient balance' };
-        }
-        if (this.wager < 10 || this.wager > 500) {
-            return { success: false, reason: 'Invalid wager amount' };
-        }
-        if (this.isPlaying) {
-            return { success: false, reason: 'Already in game' };
-        }
-        return { success: true };
-    }
-    
-    addGameRecord(record) {
-        this.gameHistory.push({
-            ...record,
-            timestamp: Date.now(),
-            sessionId: GameSession.sessionId
-        });
-        
-        // Keep only last 50 games
-        if (this.gameHistory.length > 50) {
-            this.gameHistory.shift();
-        }
-        
-        // Save to localStorage
-        this.saveToStorage();
-    }
-    
-    saveToStorage() {
-        try {
-            const data = {
-                balance: this.balance,
-                wagerHistory: this.wagerHistory,
-                gameHistory: this.gameHistory
-            };
-            localStorage.setItem('bingo_game_state', JSON.stringify(data));
-        } catch (error) {
-            console.error('Failed to save game state:', error);
-        }
-    }
-    
-    loadFromStorage() {
-        try {
-            const data = JSON.parse(localStorage.getItem('bingo_game_state'));
-            if (data) {
-                this.balance = data.balance || 1000;
-                this.wagerHistory = data.wagerHistory || [];
-                this.gameHistory = data.gameHistory || [];
-            }
-        } catch (error) {
-            console.error('Failed to load game state:', error);
-        }
-    }
-    
-    validateGameState() {
-        const errors = [];
-        
-        if (this.balance < 0) {
-            errors.push('Balance cannot be negative');
-            this.balance = 0;
-        }
-        
-        if (this.wager < 10) this.wager = 10;
-        if (this.wager > 500) this.wager = 500;
-        
-        return errors;
     }
 }
 
@@ -147,14 +26,13 @@ class GameState {
 class GameSession {
     static drawnNumbers = [];
     static drawInterval = null;
-    static sessionTimer = null;
     static drawCount = 0;
     static maxDraws = 75;
-    static drawIntervalMs = 1000; // 1 second between draws
-    static betweenGamesIntervalMs = 60000; // 1 minute between sessions
+    static drawIntervalMs = 1000;
+    static betweenGamesIntervalMs = 60000;
     static takenNumbers = new Set();
-    static activePlayers = 1;
-    static totalCards = 1;
+    static activePlayers = 3;
+    static totalCards = 3;
     static sessionActive = true;
     static sessionEnded = false;
     static winnersCount = 0;
@@ -163,95 +41,144 @@ class GameSession {
     static sessionId = 1;
     static currentBall = null;
     static recentWinners = [];
+    static callHistory = [];
     
-    static start() {
+    static startGameSession() {
         this.sessionActive = true;
         this.sessionEnded = false;
         this.drawnNumbers = [];
         this.drawCount = 0;
         this.winnersCount = 0;
         this.waitingForNextSession = false;
-        this.takenNumbers.clear();
+        this.currentBall = null;
+        this.callHistory = [];
         
-        // Clear any existing intervals
-        this.clearAllIntervals();
+        // Clear existing intervals
+        if (this.drawInterval) clearInterval(this.drawInterval);
+        if (this.nextSessionTimer) clearInterval(this.nextSessionTimer);
         
-        // Start automatic draws every 1 second
+        // Start draws every second
         this.drawInterval = setInterval(() => {
             this.drawBall();
         }, this.drawIntervalMs);
         
-        console.log(`Session ${this.sessionId} started`);
+        // Update UI
+        UIManager.updateUI();
+        UIManager.showNotification('New session started!', 'success');
     }
     
     static drawBall() {
         if (this.drawCount >= this.maxDraws) {
-            this.end();
+            this.endGameSession();
             return;
         }
         
         let ball;
-        let attempts = 0;
-        const maxAttempts = 100;
-        
         do {
             ball = Math.floor(Math.random() * 200) + 1;
-            attempts++;
-            if (attempts > maxAttempts) {
-                // If we can't find a unique number, reset the drawn numbers
-                console.warn('Could not find unique number, resetting drawn numbers');
-                this.drawnNumbers = [];
-                break;
-            }
         } while (this.drawnNumbers.includes(ball));
         
         this.drawnNumbers.push(ball);
         this.drawCount++;
         this.currentBall = ball;
         
-        // Update stats
-        StatsManager.recordDraw(ball);
+        // Get letter for the ball
+        const letterInfo = BingoAnnouncer.getLetterForNumber(ball);
+        
+        // Add to call history
+        this.callHistory.unshift({
+            number: ball,
+            letter: letterInfo.letter,
+            color: letterInfo.color,
+            timestamp: Date.now()
+        });
+        
+        // Keep only last 15 calls
+        if (this.callHistory.length > 15) {
+            this.callHistory.pop();
+        }
+        
+        // Update announcements
+        BingoAnnouncer.announceNumber(ball);
+        
+        // Mark cells on playing cards
+        this.markCellsForPlayers(ball);
         
         // Check for winners
-        this.checkAllPlayers();
+        this.checkWinners();
         
-        console.log(`Draw ${this.drawCount}: ${ball}`);
-    }
-    
-    static checkAllPlayers() {
-        // In a real multiplayer game, this would check all connected players
-        // For now, we'll just simulate some winners
-        if (Math.random() < 0.01 && this.drawCount > 20) { // 1% chance per draw
-            this.simulateWinner();
+        // Update UI
+        UIManager.updateUI();
+        UIManager.updateCallHistory();
+        
+        // Simulate other players occasionally
+        if (Math.random() < 0.1 && this.drawCount > 20) {
+            this.simulateOtherPlayerWin();
         }
     }
     
-    static simulateWinner() {
+    static markCellsForPlayers(ball) {
+        const state = GameState.getInstance();
+        
+        if (state.isPlaying && state.hasJoinedSession) {
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach(cell => {
+                if (cell.dataset.val == ball) {
+                    state.markedCells.add(cell.dataset.val);
+                    cell.classList.add('marked');
+                    
+                    // Check if player won
+                    UIManager.checkWin();
+                }
+            });
+        }
+    }
+    
+    static checkWinners() {
+        // In a real game, this would check all players
+        // Here we just simulate occasionally
+        if (Math.random() < 0.02 && this.drawCount > 30) {
+            this.winnersCount++;
+            UIManager.updateUI();
+            
+            // Add simulated winner
+            const simulatedWinner = {
+                playerId: 'player_' + Math.random().toString(36).substr(2, 9),
+                number: Math.floor(Math.random() * 200) + 1,
+                pattern: ['line', 'four-corners', 'x'][Math.floor(Math.random() * 3)],
+                winnings: Math.floor(Math.random() * 500) + 100,
+                draws: this.drawCount
+            };
+            
+            this.recentWinners.unshift(simulatedWinner);
+            if (this.recentWinners.length > 10) {
+                this.recentWinners.pop();
+            }
+        }
+    }
+    
+    static simulateOtherPlayerWin() {
         this.winnersCount++;
-        const simulatedWinner = {
-            id: `player_${Math.random().toString(36).substr(2, 9)}`,
-            pattern: ['line', 'four-corners', 'x'][Math.floor(Math.random() * 3)],
-            draws: this.drawCount,
-            winnings: Math.floor(Math.random() * 500) + 100,
-            cardNumbers: Array.from({length: 25}, () => Math.floor(Math.random() * 200) + 1)
-        };
-        
-        this.recentWinners.unshift(simulatedWinner);
-        if (this.recentWinners.length > 10) {
-            this.recentWinners.pop();
-        }
-        
-        // Add to history
-        HistoryManager.addWinner(simulatedWinner);
+        UIManager.showNotification('🎉 Another player just won Bingo!', 'info');
+        UIManager.updateUI();
     }
     
-    static end() {
+    static endGameSession() {
         clearInterval(this.drawInterval);
         this.sessionActive = false;
         this.sessionEnded = true;
         this.currentBall = null;
         
-        console.log(`Session ${this.sessionId} ended`);
+        // Show lose modal for any playing players
+        const state = GameState.getInstance();
+        if (state.isPlaying && !state.sessionWon) {
+            setTimeout(() => {
+                document.getElementById('loseAmount').textContent = `-${state.wager}`;
+                document.getElementById('loseModal').classList.add('active');
+                state.isPlaying = false;
+                state.hasJoinedSession = false;
+            }, 1000);
+        }
         
         // Start waiting period for next session
         this.startWaitingPeriod();
@@ -259,11 +186,11 @@ class GameSession {
     
     static startWaitingPeriod() {
         this.waitingForNextSession = true;
-        let seconds = this.betweenGamesIntervalMs / 1000;
+        let seconds = 60;
         
-        // Update timer every second
         this.nextSessionTimer = setInterval(() => {
             seconds--;
+            document.getElementById('nextSessionTimer').textContent = seconds;
             
             if (seconds <= 0) {
                 clearInterval(this.nextSessionTimer);
@@ -276,26 +203,22 @@ class GameSession {
         this.sessionId++;
         this.waitingForNextSession = false;
         
-        this.clearAllIntervals();
-        
-        // Reset session state
-        this.drawnNumbers = [];
-        this.drawCount = 0;
+        // Clear taken numbers for new session
         this.takenNumbers.clear();
-        this.winnersCount = 0;
-        this.sessionActive = true;
-        this.sessionEnded = false;
         
-        // Start new session
-        this.start();
+        // Reset for new session
+        this.startGameSession();
         
-        console.log(`New session ${this.sessionId} started`);
-    }
-    
-    static clearAllIntervals() {
-        clearInterval(this.drawInterval);
-        clearInterval(this.nextSessionTimer);
-        clearInterval(this.sessionTimer);
+        // Reset player state
+        const state = GameState.getInstance();
+        state.isPlaying = false;
+        state.hasJoinedSession = false;
+        state.selectedCenter = null;
+        state.markedCells.clear();
+        
+        // Update UI
+        UIManager.updateUI();
+        UIManager.showNotification('New session ready! Use Quick Join!', 'success');
     }
     
     static takeNumber(number) {
@@ -311,77 +234,104 @@ class GameSession {
         this.takenNumbers.delete(number);
         this.totalCards = Math.max(1, this.totalCards - 1);
     }
+}
+
+// Bingo Pattern Checkers
+class BingoPatterns {
+    static checkLineBingo() {
+        const cells = document.querySelectorAll('.cell');
+        
+        // Check rows
+        for (let row = 0; row < 5; row++) {
+            let complete = true;
+            for (let col = 0; col < 5; col++) {
+                const idx = row * 5 + col;
+                if (idx === 12) continue; // Skip free space
+                if (!cells[idx].classList.contains('marked')) {
+                    complete = false;
+                    break;
+                }
+            }
+            if (complete) return true;
+        }
+        
+        // Check columns
+        for (let col = 0; col < 5; col++) {
+            let complete = true;
+            for (let row = 0; row < 5; row++) {
+                const idx = row * 5 + col;
+                if (idx === 12) continue;
+                if (!cells[idx].classList.contains('marked')) {
+                    complete = false;
+                    break;
+                }
+            }
+            if (complete) return true;
+        }
+        
+        return false;
+    }
     
-    static getSessionInfo() {
-        return {
-            sessionId: this.sessionId,
-            drawCount: this.drawCount,
-            maxDraws: this.maxDraws,
-            sessionActive: this.sessionActive,
-            waitingForNextSession: this.waitingForNextSession,
-            winnersCount: this.winnersCount,
-            activePlayers: this.activePlayers,
-            totalCards: this.totalCards,
-            currentBall: this.currentBall
-        };
+    static checkFourCorners() {
+        const cells = document.querySelectorAll('.cell');
+        const corners = [0, 4, 20, 24];
+        return corners.every(idx => cells[idx].classList.contains('marked'));
+    }
+    
+    static checkFullHouse() {
+        const cells = document.querySelectorAll('.cell');
+        return Array.from(cells).every(cell => cell.classList.contains('marked'));
+    }
+    
+    static checkXBingo() {
+        const cells = document.querySelectorAll('.cell');
+        
+        // Main diagonal
+        for (let i = 0; i < 5; i++) {
+            const idx = i * 6;
+            if (idx !== 12 && !cells[idx].classList.contains('marked')) {
+                return false;
+            }
+        }
+        
+        // Anti-diagonal
+        for (let i = 0; i < 5; i++) {
+            const idx = i * 4 + 4;
+            if (idx !== 12 && !cells[idx].classList.contains('marked')) {
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    
+    static checkBlackout() {
+        const cells = document.querySelectorAll('.cell');
+        return Array.from(cells).every(cell => cell.classList.contains('marked'));
+    }
+    
+    static checkPattern(pattern) {
+        switch(pattern) {
+            case 'line': return this.checkLineBingo();
+            case 'four-corners': return this.checkFourCorners();
+            case 'full-house': return this.checkFullHouse();
+            case 'x': return this.checkXBingo();
+            case 'blackout': return this.checkBlackout();
+            default: return this.checkLineBingo();
+        }
     }
 }
 
-// Error Handling
+// Error Handler
 class ErrorHandler {
-    static errors = [];
-    
-    static showError(message, isFatal = false) {
+    static showError(message, type = 'error') {
         console.error(`Error: ${message}`);
-        
-        this.errors.push({
-            timestamp: Date.now(),
-            message: message,
-            isFatal: isFatal
-        });
-        
-        // Keep only last 50 errors
-        if (this.errors.length > 50) {
-            this.errors.shift();
-        }
-        
-        // Show error modal
-        const modal = document.getElementById('errorModal');
-        const messageEl = document.getElementById('errorMessage');
-        
-        if (modal && messageEl) {
-            messageEl.textContent = message;
-            modal.classList.add('active');
-        }
-        
-        // If fatal error, disable game
-        if (isFatal) {
-            GameSession.clearAllIntervals();
-            console.error('Fatal error occurred, game disabled');
-        }
-    }
-    
-    static clearErrors() {
-        this.errors = [];
-    }
-    
-    static getErrorStats() {
-        const total = this.errors.length;
-        const fatal = this.errors.filter(e => e.isFatal).length;
-        const recent = this.errors.filter(e => Date.now() - e.timestamp < 3600000).length; // Last hour
-        
-        return { total, fatal, recent };
+        UIManager.showNotification(`Error: ${message}`, type);
     }
 }
 
-// Initialize game state when module loads
-try {
-    GameState.initialize();
-} catch (error) {
-    ErrorHandler.showError(`Failed to initialize game: ${error.message}`, true);
-}
-
-// Export for use in other files
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { GameState, GameSession, ErrorHandler };
-}
+// Initialize game state
+window.GameState = GameState;
+window.GameSession = GameSession;
+window.BingoPatterns = BingoPatterns;
+window.ErrorHandler = ErrorHandler;
