@@ -144,17 +144,17 @@
 
         <!-- Action Buttons (Context-aware) -->
         <div class="action-buttons">
-            <button class="action-btn" id="wagerBtn" onclick="toggleWagerModal()">
+            <button class="action-btn" id="wagerBtn" onclick="UIManager.toggleWagerModal()">
                 <span class="icon">💰</span>
                 <span class="text">Bet: <span id="wagerBtnLabel">50</span></span>
             </button>
             
-            <button class="action-btn" id="readyBtn" onclick="prepareForNextSession()">
+            <button class="action-btn" id="readyBtn" onclick="UIManager.prepareForNextSession()">
                 <span class="icon">✅</span>
                 <span class="text">Get Ready</span>
             </button>
             
-            <button class="action-btn" id="joinBtn" onclick="joinNextSession()" disabled>
+            <button class="action-btn" id="joinBtn" onclick="UIManager.showJoinConfirmation()" disabled>
                 <span class="icon">🎮</span>
                 <span class="text">JOIN NEXT</span>
             </button>
@@ -176,8 +176,8 @@
                     <span id="confirmWager">50</span> credits
                 </div>
             </div>
-            <button class="confirm-btn" onclick="confirmJoin()">CONFIRM JOIN</button>
-            <button class="cancel-btn" onclick="cancelJoin()">CANCEL</button>
+            <button class="confirm-btn" onclick="UIManager.confirmJoin()">CONFIRM JOIN</button>
+            <button class="cancel-btn" onclick="UIManager.cancelJoin()">CANCEL</button>
         </div>
 
         <!-- Quick Stats -->
@@ -194,7 +194,7 @@
                 <div class="mini-value" id="winsMini">0</div>
                 <div class="mini-label">Wins</div>
             </div>
-            <button class="history-btn" onclick="showGameHistory()">
+            <button class="history-btn" onclick="UIManager.showGameHistory()">
                 <span class="icon">📊</span>
                 Stats
             </button>
@@ -206,16 +206,16 @@
         <div class="modal-content">
             <h3>💰 Select Wager</h3>
             <div class="wager-ui">
-                <button class="wager-btn" onclick="changeWager(-25)">-25</button>
-                <button class="wager-btn" onclick="changeWager(-10)">-10</button>
+                <button class="wager-btn" onclick="UIManager.changeWager(-25)">-25</button>
+                <button class="wager-btn" onclick="UIManager.changeWager(-10)">-10</button>
                 <div class="wager-display" id="modalWager">50</div>
-                <button class="wager-btn" onclick="changeWager(10)">+10</button>
-                <button class="wager-btn" onclick="changeWager(25)">+25</button>
+                <button class="wager-btn" onclick="UIManager.changeWager(10)">+10</button>
+                <button class="wager-btn" onclick="UIManager.changeWager(25)">+25</button>
             </div>
             <div class="wager-limits">
                 Min: 10 | Max: 500 | Balance: <span id="modalBalance">1000</span>
             </div>
-            <button class="modal-btn confirm" onclick="toggleWagerModal()">SET WAGER</button>
+            <button class="modal-btn confirm" onclick="UIManager.closeWagerModal()">SET WAGER</button>
         </div>
     </div>
 
@@ -230,7 +230,7 @@
                 <div><span>Calls:</span> <span id="winCalls">25</span> / 75</div>
                 <div><span>Wager:</span> <span id="winWager">50</span> credits</div>
             </div>
-            <button class="modal-btn" onclick="closeWinModal()">CONTINUE</button>
+            <button class="modal-btn" onclick="UIManager.closeWinModal()">CONTINUE</button>
         </div>
     </div>
 
@@ -244,7 +244,7 @@
                 No bingo pattern completed.<br>
                 75 calls reached.
             </div>
-            <button class="modal-btn" onclick="closeLoseModal()">TRY NEXT SESSION</button>
+            <button class="modal-btn" onclick="UIManager.closeLoseModal()">TRY NEXT SESSION</button>
         </div>
     </div>
 
@@ -258,7 +258,7 @@
                 <p>Pick your center number now!</p>
                 <p>Numbers will be locked when draws start.</p>
             </div>
-            <button class="modal-btn" onclick="closeJoinPhaseModal()">START PICKING</button>
+            <button class="modal-btn" onclick="UIManager.closeJoinPhaseModal()">START PICKING</button>
         </div>
     </div>
 
@@ -276,22 +276,63 @@
                     <div class="winners-list" id="historyWinners"></div>
                 </div>
             </div>
-            <button class="modal-btn" onclick="closeHistoryModal()">CLOSE</button>
+            <button class="modal-btn" onclick="UIManager.closeHistoryModal()">CLOSE</button>
         </div>
     </div>
 
-    <!-- JavaScript -->
+    <!-- Quick Join Modal -->
+    <div class="modal" id="quickJoinModal">
+        <div class="modal-content join-modal">
+            <div class="join-icon">🎯</div>
+            <h2>QUICK JOIN</h2>
+            <div class="quick-join-details">
+                <div><span>Number:</span> <span id="quickJoinNumber">-</span></div>
+                <div><span>Pattern:</span> <span id="quickJoinPattern">LINE</span></div>
+                <div><span>Wager:</span> <span id="quickJoinWager">50</span> credits</div>
+                <div><span>Win Chance:</span> <span id="quickJoinChance">Good (25%)</span></div>
+            </div>
+            <button class="modal-btn" onclick="QuickJoinManager.confirmQuickJoin()">JOIN NOW</button>
+            <button class="modal-btn cancel" onclick="QuickJoinManager.closeQuickJoinModal()">CANCEL</button>
+        </div>
+    </div>
+
+    <!-- JavaScript Files -->
     <script src="game.js"></script>
     <script src="ui.js"></script>
+    <script src="history.js"></script>
+    <script src="patterns.js"></script>
+    <script src="announcer.js"></script>
+    <script src="multiplayer.js"></script>
+    <script src="quickjoin.js"></script>
+    <script src="stats.js"></script>
+    
     <script>
-        // Initialize game
+        // Initialize game when DOM is loaded
         document.addEventListener('DOMContentLoaded', function() {
-            // Initialize UI
-            UIManager.init();
-            
-            // Start the first session cycle
-            GameManager.start();
+            try {
+                // Initialize all managers
+                UIManager.init();
+                HistoryManager.init();
+                BingoAnnouncer.init();
+                QuickJoinManager.init();
+                MultiplayerManager.init();
+                StatsManager.init();
+                
+                // Start the game
+                GameManager.start();
+                
+                console.log('Bingo Game initialized successfully');
+                
+                // Show welcome message
+                setTimeout(() => {
+                    UIManager.showNotification('Welcome to Bingo Casino!', 'success');
+                }, 1000);
+                
+            } catch (error) {
+                console.error('Game initialization error:', error);
+                UIManager.showNotification('Failed to initialize game', 'error');
+            }
         });
     </script>
 </body>
-</html>
+                    </html>
