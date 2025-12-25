@@ -1082,6 +1082,111 @@ body {
     border-radius: 4px;
 }
 
+
+/* Hot Numbers Container */
+.hot-numbers-container {
+    background: var(--surface);
+    border-radius: 16px;
+    padding: 16px;
+    margin: 20px 0;
+    border: 1px solid var(--glass-border);
+}
+
+.hot-numbers-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 12px;
+}
+
+.hot-number-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    border: 1px solid var(--glass-border);
+    min-width: 120px;
+}
+
+.hot-number-item.very-hot {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: var(--danger);
+}
+
+.hot-number-rank {
+    font-weight: 900;
+    color: var(--accent);
+    font-size: 1.1rem;
+    min-width: 24px;
+}
+
+.hot-number-value {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--text-main);
+    min-width: 40px;
+}
+
+.hot-number-stats {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    font-size: 0.8rem;
+}
+
+.hot-number-count {
+    color: var(--text-dim);
+}
+
+.hot-number-percentage {
+    color: var(--secondary);
+    font-weight: bold;
+}
+
+.hot-numbers-info {
+    width: 100%;
+    text-align: center;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--glass-border);
+}
+
+.no-hot-numbers {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-dim);
+    font-style: italic;
+    width: 100%;
+}
+
+/* Animation for marking cells */
+@keyframes markCell {
+    0% { 
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    }
+    50% { 
+        transform: scale(1.1);
+        box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+    }
+    100% { 
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    }
+}
+
+.cell.marked {
+    animation: markCell 0.5s ease-out;
+    }
+/* Animation for marking cells */
+
+
+.cell.marked {
+    animation: markCell 0.5s ease-out;
+    }
 /* Quick Join Modal Details */
 .quick-join-details {
     background: rgba(255, 255, 255, 0.05);
