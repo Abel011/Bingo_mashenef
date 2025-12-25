@@ -2,30 +2,37 @@
 class MultiplayerManager {
     static players = new Map();
     static simulationInterval = null;
-    static connectionStatus = 'disconnected';
-    static lastUpdate = 0;
+    static connectionStatus = 'connected';
+    static lastUpdate = Date.now();
     
     static init() {
+        console.log('Multiplayer Manager initializing...');
         this.setupEventListeners();
         this.loadPlayerData();
+        this.updateConnectionDisplay();
+        return true;
     }
     
     static setupEventListeners() {
         // Network status monitoring
-        window.addEventListener('online', () => {
-            this.handleConnectionChange(true);
-        });
-        
-        window.addEventListener('offline', () => {
-            this.handleConnectionChange(false);
-        });
+        if (window.addEventListener) {
+            window.addEventListener('online', () => {
+                this.handleConnectionChange(true);
+            });
+            
+            window.addEventListener('offline', () => {
+                this.handleConnectionChange(false);
+            });
+        }
         
         // Visibility change
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
-                this.checkConnection();
-            }
-        });
+        if (document.addEventListener) {
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    this.checkConnection();
+                }
+            });
+        }
     }
     
     static handleConnectionChange(isOnline) {
@@ -33,51 +40,76 @@ class MultiplayerManager {
         
         if (isOnline) {
             this.syncWithServer();
-            UIManager.showNotification('Connected to game server', 'success');
-        } else {
-            UIManager.showNotification('Disconnected from server', 'error');
         }
         
         this.updateConnectionDisplay();
     }
     
     static updateConnectionDisplay() {
-        const indicator = document.querySelector('.connection-status');
-        if (!indicator) return;
+        // Create connection indicator if it doesn't exist
+        let indicator = document.querySelector('.connection-status');
         
-        indicator.className = `connection-status ${this.connectionStatus}`;
-        indicator.textContent = this.connectionStatus.toUpperCase();
+        if (!indicator) {
+            // Add to top bar
+            const topBar = document.querySelector('.top-bar');
+            if (topBar) {
+                indicator = document.createElement('div');
+                indicator.className = `connection-status ${this.connectionStatus}`;
+                indicator.textContent = this.connectionStatus.toUpperCase();
+                indicator.style.cssText = `
+                    font-size: 0.7rem;
+                    padding: 4px 8px;
+                    border-radius: 12px;
+                    background: ${this.connectionStatus === 'connected' ? 'var(--secondary)' : 'var(--danger)'};
+                    color: white;
+                    font-weight: bold;
+                `;
+                topBar.appendChild(indicator);
+            }
+        } else {
+            indicator.className = `connection-status ${this.connectionStatus}`;
+            indicator.textContent = this.connectionStatus.toUpperCase();
+            indicator.style.background = this.connectionStatus === 'connected' ? 'var(--secondary)' : 'var(--danger)';
+        }
     }
     
     static checkConnection() {
-        const isOnline = navigator.onLine;
+        const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
         this.handleConnectionChange(isOnline);
     }
     
     static syncWithServer() {
-        // In a real implementation, this would sync with a backend server
         console.log('Syncing with server...');
+        this.lastUpdate = Date.now();
         
-        // Simulate server response
+        // Simulate server sync
         setTimeout(() => {
             this.updatePlayerCount();
             this.updateTakenNumbers();
-        }, 1000);
+        }, 500);
     }
     
     static updatePlayerCount() {
+        const game = GameManager.getInstance();
+        
         // Simulate player count changes
         const baseCount = 5;
         const randomFactor = Math.floor(Math.random() * 10);
-        GameSession.activePlayers = baseCount + randomFactor;
+        const simulatedPlayers = baseCount + randomFactor;
         
-        UIManager.updateUI();
+        // Update only if significantly different
+        if (Math.abs(game.activePlayers - simulatedPlayers) > 2) {
+            game.activePlayers = simulatedPlayers;
+            UIManager.updateStats();
+        }
     }
     
     static updateTakenNumbers() {
+        const game = GameManager.getInstance();
+        
         // Simulate other players taking numbers
-        const takenCount = GameSession.takenNumbers.size;
-        const targetCount = Math.min(50, GameSession.activePlayers * 3);
+        const takenCount = game.takenNumbers.size;
+        const targetCount = Math.min(50, game.activePlayers * 3);
         
         if (takenCount < targetCount) {
             const numbersToTake = targetCount - takenCount;
@@ -88,21 +120,26 @@ class MultiplayerManager {
     }
     
     static simulateNumberTaking(count) {
+        const game = GameManager.getInstance();
         const availableNumbers = [];
         
         // Find available numbers
         for (let i = 1; i <= 200; i++) {
-            if (!GameSession.takenNumbers.has(i)) {
+            if (!game.takenNumbers.has(i)) {
                 availableNumbers.push(i);
             }
         }
         
         // Take random numbers
-        for (let i = 0; i < Math.min(count, availableNumbers.length); i++) {
+        const numbersToTake = Math.min(count, Math.floor(availableNumbers.length * 0.3));
+        
+        for (let i = 0; i < numbersToTake; i++) {
+            if (availableNumbers.length === 0) break;
+            
             const randomIndex = Math.floor(Math.random() * availableNumbers.length);
             const number = availableNumbers[randomIndex];
             
-            GameSession.takeNumber(number);
+            game.takenNumbers.add(number);
             availableNumbers.splice(randomIndex, 1);
         }
     }
@@ -122,49 +159,77 @@ class MultiplayerManager {
     }
     
     static simulateMultiplayerActivity() {
-        if (!GameSession.sessionActive) return;
+        const game = GameManager.getInstance();
+        
+        if (!game.sessionId || game.currentPhase !== 'drawing') return;
         
         // Simulate player joins/leaves
         this.simulatePlayerChanges();
         
-        // Simulate number taking
-        this.simulateNumberTaking(Math.floor(Math.random() * 3));
+        // Simulate number taking occasionally
+        if (Math.random() < 0.3) {
+            this.simulateNumberTaking(Math.floor(Math.random() * 3));
+        }
         
-        // Simulate wins
-        this.simulateWins();
+        // Simulate wins during drawing phase
+        if (game.currentPhase === 'drawing' && game.drawsCompleted > 20 && Math.random() < 0.05) {
+            this.simulateWin();
+        }
         
         // Update UI
         UIManager.updateUI();
     }
     
     static simulatePlayerChanges() {
+        const game = GameManager.getInstance();
+        
+        // Small random change to player count
         const change = Math.floor(Math.random() * 3) - 1; // -1, 0, or 1
-        GameSession.activePlayers = Math.max(1, GameSession.activePlayers + change);
+        const newCount = Math.max(1, game.activePlayers + change);
+        
+        // Only update if changed
+        if (newCount !== game.activePlayers) {
+            game.activePlayers = newCount;
+        }
         
         // Update total cards
-        GameSession.totalCards = GameSession.activePlayers + GameSession.takenNumbers.size;
+        game.totalCards = game.activePlayers + game.takenNumbers.size;
     }
     
-    static simulateWins() {
-        if (!GameSession.sessionActive || GameSession.drawCount < 20) return;
+    static simulateWin() {
+        const game = GameManager.getInstance();
         
-        // 5% chance to simulate a win
-        if (Math.random() < 0.05) {
-            GameSession.simulateWinner();
-            UIManager.updateUI();
-            
-            // Show notification
-            UIManager.showNotification('Another player just won!', 'info');
+        // Simulate a win announcement
+        const patterns = ['line', 'four-corners', 'x'];
+        const randomPattern = patterns[Math.floor(Math.random() * patterns.length)];
+        const winnings = Math.floor(Math.random() * 500) + 100;
+        
+        // Add to winners list
+        game.winners.push({
+            player: `Player_${Math.floor(Math.random() * 1000)}`,
+            pattern: randomPattern,
+            winnings: winnings,
+            draws: game.drawsCompleted
+        });
+        
+        // Show notification occasionally
+        if (Math.random() < 0.3) {
+            setTimeout(() => {
+                UIManager.showNotification('Another player just won!', 'info');
+            }, 1000);
         }
+        
+        // Update stats
+        UIManager.updateStats();
     }
     
     static loadPlayerData() {
-        // Load player data from localStorage
         try {
             const playerData = localStorage.getItem('bingo_player');
             if (playerData) {
                 const data = JSON.parse(playerData);
                 this.players.set('local_player', data);
+                console.log('Player data loaded');
             }
         } catch (error) {
             console.error('Failed to load player data:', error);
@@ -172,13 +237,16 @@ class MultiplayerManager {
     }
     
     static savePlayerData() {
-        // Save player data to localStorage
         try {
+            const game = GameManager.getInstance();
+            const stats = StatsManager.getPlayerStats();
+            
             const playerData = {
                 lastPlayed: Date.now(),
-                totalGames: StatsManager.playerStats.gamesPlayed,
-                totalWins: StatsManager.playerStats.gamesWon,
-                balance: GameState.getInstance().balance
+                totalGames: stats.gamesPlayed,
+                totalWins: stats.gamesWon,
+                balance: game.balance,
+                playerStats: stats
             };
             
             localStorage.setItem('bingo_player', JSON.stringify(playerData));
@@ -205,10 +273,9 @@ class MultiplayerManager {
     }
     
     static getLeaderboard(limit = 10) {
-        // In a real implementation, this would fetch from server
+        // Simulated leaderboard
         const leaderboard = [];
         
-        // Add simulated players
         for (let i = 0; i < limit; i++) {
             leaderboard.push({
                 rank: i + 1,
@@ -240,7 +307,5 @@ class MultiplayerManager {
 // Initialize Multiplayer Manager
 MultiplayerManager.init();
 
-// Export for use in other files
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = MultiplayerManager;
-}
+// Make globally available
+window.MultiplayerManager = MultiplayerManager;
