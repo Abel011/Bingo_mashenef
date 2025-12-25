@@ -9,7 +9,8 @@ class BingoAnnouncer {
     };
     
     static init() {
-        this.setupAnnouncementDisplay();
+        console.log('Bingo Announcer initialized');
+        return true;
     }
     
     static getLetterForNumber(number) {
@@ -33,10 +34,7 @@ class BingoAnnouncer {
     static announceNumber(number) {
         const letterInfo = this.getLetterForNumber(number);
         
-        // Update display
-        this.updateAnnouncementDisplay(letterInfo, number);
-        
-        // Play announcement sound (placeholder)
+        // Play announcement sound
         this.playAnnouncementSound(letterInfo.letter);
         
         // Log to console
@@ -45,84 +43,46 @@ class BingoAnnouncer {
         return `${letterInfo.letter}-${number}`;
     }
     
-    static updateAnnouncementDisplay(letterInfo, number) {
-        // Update letter display
-        const letterDisplay = document.getElementById('letterDisplay');
-        if (letterDisplay) {
-            letterDisplay.textContent = letterInfo.letter;
-            letterDisplay.style.background = letterInfo.color;
-            letterDisplay.classList.add('pulse');
-            setTimeout(() => letterDisplay.classList.remove('pulse'), 500);
-        }
-        
-        // Update ball display
-        const ballDisplay = document.getElementById('ballDisplay');
-        if (ballDisplay) {
-            ballDisplay.textContent = number;
-            ballDisplay.style.color = letterInfo.color;
-            ballDisplay.classList.add('pulse');
-            setTimeout(() => ballDisplay.classList.remove('pulse'), 500);
-        }
-        
-        // Update letter info
-        const letterInfoEl = document.getElementById('letterInfo');
-        if (letterInfoEl) {
-            letterInfoEl.textContent = `${letterInfo.name} Column (${letterInfo.range})`;
-            letterInfoEl.style.color = letterInfo.color;
-        }
-        
-        // Update call number
-        const callNumber = document.getElementById('callNumber');
-        if (callNumber) {
-            callNumber.textContent = number;
-        }
-    }
-    
     static playAnnouncementSound(letter) {
-        // In a real implementation, this would play different sounds for each letter
+        // Simple beep sound implementation
         try {
-            // Simple beep sound
-            const context = new (window.AudioContext || window.webkitAudioContext)();
-            const oscillator = context.createOscillator();
-            const gainNode = context.createGain();
-            
-            oscillator.connect(gainNode);
-            gainNode.connect(context.destination);
-            
-            // Different frequencies for different letters
-            const frequencies = {
-                'B': 440,  // A4
-                'I': 493.88, // B4
-                'N': 523.25, // C5
-                'G': 587.33, // D5
-                'O': 659.25  // E5
-            };
-            
-            oscillator.frequency.value = frequencies[letter] || 440;
-            oscillator.type = 'sine';
-            
-            gainNode.gain.setValueAtTime(0.3, context.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.5);
-            
-            oscillator.start(context.currentTime);
-            oscillator.stop(context.currentTime + 0.5);
-            
+            // Check if AudioContext is available
+            if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                const context = new AudioContextClass();
+                
+                // Only play if context is not suspended (user interaction required)
+                if (context.state === 'suspended') {
+                    context.resume();
+                }
+                
+                const oscillator = context.createOscillator();
+                const gainNode = context.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(context.destination);
+                
+                // Different frequencies for different letters
+                const frequencies = {
+                    'B': 440,  // A4
+                    'I': 493.88, // B4
+                    'N': 523.25, // C5
+                    'G': 587.33, // D5
+                    'O': 659.25  // E5
+                };
+                
+                oscillator.frequency.value = frequencies[letter] || 440;
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(0.1, context.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.3);
+                
+                oscillator.start(context.currentTime);
+                oscillator.stop(context.currentTime + 0.3);
+            }
         } catch (error) {
+            // Audio not supported or blocked - silent fail
             console.log('Audio not supported or blocked');
-        }
-    }
-    
-    static setupAnnouncementDisplay() {
-        // Create initial display
-        const defaultLetter = this.getLetterForNumber(1);
-        
-        const letterDisplay = document.getElementById('letterDisplay');
-        if (letterDisplay) {
-            letterDisplay.style.background = defaultLetter.color;
-            letterDisplay.style.display = 'flex';
-            letterDisplay.style.alignItems = 'center';
-            letterDisplay.style.justifyContent = 'center';
-            letterDisplay.style.borderRadius = '50%';
         }
     }
     
@@ -137,10 +97,10 @@ class BingoAnnouncer {
         const range = this.LETTER_RANGES[letter];
         if (!range) return null;
         
-        const session = GameSession;
+        const game = GameManager.getInstance();
         let drawnInColumn = 0;
         
-        session.drawnNumbers.forEach(number => {
+        game.drawnNumbers.forEach(number => {
             if (number >= range.min && number <= range.max) {
                 drawnInColumn++;
             }
@@ -149,9 +109,13 @@ class BingoAnnouncer {
         return {
             totalNumbers: range.max - range.min + 1,
             drawn: drawnInColumn,
-            percentage: session.drawCount > 0 ? 
-                ((drawnInColumn / session.drawCount) * 100).toFixed(1) : '0.0'
+            percentage: game.drawsCompleted > 0 ? 
+                ((drawnInColumn / game.drawsCompleted) * 100).toFixed(1) : '0.0'
         };
+    }
+    
+    static getAllColumns() {
+        return Object.keys(this.LETTER_RANGES);
     }
 }
 
