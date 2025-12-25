@@ -53,47 +53,59 @@ class HistoryManager {
     }
     
     static addGameRecord(record) {
-        const fullRecord = {
-            ...record,
-            id: this.generateId(),
-            timestamp: Date.now(),
-            sessionId: GameSession.sessionId,
-            drawCount: GameSession.drawCount
-        };
-        
-        this.history.unshift(fullRecord);
-        
-        // Keep history manageable
-        if (this.history.length > this.maxHistoryItems) {
-            this.history.pop();
+        try {
+            const game = GameManager.getInstance();
+            const fullRecord = {
+                ...record,
+                id: this.generateId(),
+                timestamp: Date.now(),
+                sessionId: game.sessionId,
+                drawCount: game.drawsCompleted
+            };
+            
+            this.history.unshift(fullRecord);
+            
+            // Keep history manageable
+            if (this.history.length > this.maxHistoryItems) {
+                this.history.pop();
+            }
+            
+            this.saveToStorage();
+            this.updateHistoryBadge();
+            
+            return fullRecord;
+        } catch (error) {
+            console.error('Error adding game record:', error);
+            return null;
         }
-        
-        this.saveToStorage();
-        this.updateHistoryBadge();
-        
-        return fullRecord;
     }
     
     static addWinner(winnerData) {
-        const winnerRecord = {
-            ...winnerData,
-            id: this.generateId(),
-            timestamp: Date.now(),
-            sessionId: GameSession.sessionId,
-            drawCount: GameSession.drawCount
-        };
-        
-        this.winners.unshift(winnerRecord);
-        
-        // Keep winners list manageable
-        if (this.winners.length > this.maxWinners) {
-            this.winners.pop();
+        try {
+            const game = GameManager.getInstance();
+            const winnerRecord = {
+                ...winnerData,
+                id: this.generateId(),
+                timestamp: Date.now(),
+                sessionId: game.sessionId,
+                drawCount: game.drawsCompleted
+            };
+            
+            this.winners.unshift(winnerRecord);
+            
+            // Keep winners list manageable
+            if (this.winners.length > this.maxWinners) {
+                this.winners.pop();
+            }
+            
+            this.saveToStorage();
+            this.updateHistoryBadge();
+            
+            return winnerRecord;
+        } catch (error) {
+            console.error('Error adding winner:', error);
+            return null;
         }
-        
-        this.saveToStorage();
-        this.updateHistoryBadge();
-        
-        return winnerRecord;
     }
     
     static getRecentGames(count = 10) {
@@ -104,13 +116,12 @@ class HistoryManager {
         return this.winners.slice(0, count);
     }
     
-    static getWinStats(timeframe = 24 * 60 * 60 * 1000) { // Default: 24 hours
+    static getWinStats(timeframe = 24 * 60 * 60 * 1000) {
         const now = Date.now();
         const timeframeStart = now - timeframe;
         
         const gamesInTimeframe = this.history.filter(game => 
-            game.timestamp >= timeframeStart && 
-            (game.type === 'win' || game.type === 'loss')
+            game.timestamp >= timeframeStart
         );
         
         const wins = gamesInTimeframe.filter(game => game.type === 'win');
@@ -132,7 +143,7 @@ class HistoryManager {
     
     static getPatternStats() {
         const patternStats = {};
-        const wins = this.history.filter(game => game.type === 'win');
+        const wins = this.winners;
         
         wins.forEach(win => {
             const pattern = win.pattern || 'unknown';
@@ -147,7 +158,7 @@ class HistoryManager {
             
             patternStats[pattern].count++;
             patternStats[pattern].totalWinnings += win.winnings || 0;
-            patternStats[pattern].drawCounts.push(win.drawCount || 0);
+            patternStats[pattern].drawCounts.push(win.draws || 0);
         });
         
         // Calculate averages
@@ -165,13 +176,8 @@ class HistoryManager {
         return this.winners.length;
     }
     
-    static loadHistory() {
-        this.updateHistoryDisplay();
-        this.updateStatisticsDisplay();
-    }
-    
     static updateHistoryDisplay() {
-        const winnersList = document.getElementById('winnersList');
+        const winnersList = document.getElementById('historyWinners');
         if (!winnersList) return;
         
         const recentWinners = this.getRecentWinners(5);
@@ -188,20 +194,16 @@ class HistoryManager {
         let html = '';
         recentWinners.forEach((winner, index) => {
             const timeAgo = this.getTimeAgo(winner.timestamp);
-            const isCurrentPlayer = winner.id && winner.id.includes('player_') ? false : true;
             
             html += `
-                <div class="winner-item">
-                    <div class="winner-header">
-                        <span class="winner-rank">#${index + 1}</span>
-                        <span class="winner-time">${timeAgo}</span>
+                <div class="history-item">
+                    <div class="history-header">
+                        <span class="history-rank">#${index + 1}</span>
+                        <span class="history-time">${timeAgo}</span>
                     </div>
-                    <div class="winner-details">
-                        <span class="winner-pattern">${winner.pattern || 'Unknown'}</span>
-                        <span class="winner-winnings">+${winner.winnings || 0} credits</span>
-                    </div>
-                    <div class="winner-card">
-                        ${this.generateCardHTML(winner.cardNumbers || [])}
+                    <div class="history-details">
+                        <span class="history-pattern">${winner.pattern || 'Unknown'}</span>
+                        <span class="history-winnings">+${winner.winnings || 0} credits</span>
                     </div>
                 </div>
             `;
@@ -210,36 +212,20 @@ class HistoryManager {
         winnersList.innerHTML = html;
     }
     
-    static generateCardHTML(numbers) {
-        if (!numbers || numbers.length !== 25) {
-            return '<div class="no-card">No card data</div>';
-        }
-        
-        let html = '';
-        for (let i = 0; i < 25; i++) {
-            const isWinner = numbers[i] === 12 ? true : GameSession.drawnNumbers.includes(numbers[i]);
-            html += `
-                <div class="winner-card-cell ${isWinner ? 'winner' : ''}">
-                    ${numbers[i] === 12 ? 'FREE' : numbers[i]}
-                </div>
-            `;
-        }
-        return html;
-    }
-    
     static updateStatisticsDisplay() {
         const stats = this.getWinStats();
         const patternStats = this.getPatternStats();
         
-        // Update general stats
-        document.getElementById('totalGames').textContent = stats.totalGames;
-        document.getElementById('totalWins').textContent = stats.wins;
-        document.getElementById('winRate').textContent = `${stats.winRate.toFixed(1)}%`;
-        document.getElementById('totalWagered').textContent = stats.totalWagered.toLocaleString();
-    }
-    
-    static displayWinners() {
-        this.updateHistoryDisplay();
+        // Update general stats in UI if elements exist
+        const totalGamesEl = document.getElementById('totalGames');
+        const totalWinsEl = document.getElementById('totalWins');
+        const winRateEl = document.getElementById('winRate');
+        const totalWageredEl = document.getElementById('totalWagered');
+        
+        if (totalGamesEl) totalGamesEl.textContent = stats.totalGames;
+        if (totalWinsEl) totalWinsEl.textContent = stats.wins;
+        if (winRateEl) winRateEl.textContent = `${stats.winRate.toFixed(1)}%`;
+        if (totalWageredEl) totalWageredEl.textContent = stats.totalWagered.toLocaleString();
     }
     
     static getTimeAgo(timestamp) {
@@ -298,10 +284,8 @@ class HistoryManager {
     }
 }
 
-// Initialize History Manager
+// Initialize History Manager when script loads
 HistoryManager.init();
 
-// Export for use in other files
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = HistoryManager;
-}
+// Make globally available
+window.HistoryManager = HistoryManager;
