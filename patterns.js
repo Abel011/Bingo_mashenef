@@ -1,16 +1,39 @@
 // Bingo Pattern Checkers
 class BingoPatterns {
     static patterns = {
-        'line': { name: 'Line', check: this.checkLineBingo },
-        'four-corners': { name: 'Four Corners', check: this.checkFourCorners },
-        'full-house': { name: 'Full House', check: this.checkFullHouse },
-        'x': { name: 'X Pattern', check: this.checkXBingo },
-        'blackout': { name: 'Blackout', check: this.checkBlackout }
+        'line': { 
+            name: 'Line', 
+            check: this.checkLineBingo,
+            multiplier: 5
+        },
+        'four-corners': { 
+            name: 'Four Corners', 
+            check: this.checkFourCorners,
+            multiplier: 3
+        },
+        'full-house': { 
+            name: 'Full House', 
+            check: this.checkFullHouse,
+            multiplier: 10
+        },
+        'x': { 
+            name: 'X Pattern', 
+            check: this.checkXBingo,
+            multiplier: 7
+        },
+        'blackout': { 
+            name: 'Blackout', 
+            check: this.checkBlackout,
+            multiplier: 15
+        }
     };
     
     static checkLineBingo() {
-        const cells = document.querySelectorAll('.cell');
-        if (cells.length !== 25) return false;
+        const game = GameManager.getInstance();
+        
+        if (!game.isPlaying || !game.hasCard || game.cardNumbers.length !== 25) {
+            return false;
+        }
         
         // Check rows
         for (let row = 0; row < 5; row++) {
@@ -18,7 +41,7 @@ class BingoPatterns {
             for (let col = 0; col < 5; col++) {
                 const index = row * 5 + col;
                 if (index === 12) continue; // Skip free space
-                if (!cells[index].classList.contains('marked')) {
+                if (!game.markedNumbers.has(game.cardNumbers[index])) {
                     rowComplete = false;
                     break;
                 }
@@ -32,7 +55,7 @@ class BingoPatterns {
             for (let row = 0; row < 5; row++) {
                 const index = row * 5 + col;
                 if (index === 12) continue; // Skip free space
-                if (!cells[index].classList.contains('marked')) {
+                if (!game.markedNumbers.has(game.cardNumbers[index])) {
                     colComplete = false;
                     break;
                 }
@@ -44,39 +67,55 @@ class BingoPatterns {
     }
     
     static checkFourCorners() {
-        const cells = document.querySelectorAll('.cell');
-        if (cells.length !== 25) return false;
+        const game = GameManager.getInstance();
         
-        const corners = [0, 4, 20, 24];
-        return corners.every(index => cells[index].classList.contains('marked'));
+        if (!game.isPlaying || !game.hasCard || game.cardNumbers.length !== 25) {
+            return false;
+        }
+        
+        const corners = [0, 4, 20, 24]; // Indices of corners
+        
+        return corners.every(index => {
+            if (index === 12) return true; // Center is free
+            return game.markedNumbers.has(game.cardNumbers[index]);
+        });
     }
     
     static checkFullHouse() {
-        const cells = document.querySelectorAll('.cell');
-        if (cells.length !== 25) return false;
+        const game = GameManager.getInstance();
         
-        return Array.from(cells).every((cell, index) => {
-            if (index === 12) return true; // Free space is always marked
-            return cell.classList.contains('marked');
+        if (!game.isPlaying || !game.hasCard || game.cardNumbers.length !== 25) {
+            return false;
+        }
+        
+        // All 25 cells must be marked (center is always marked as free)
+        return game.cardNumbers.every((number, index) => {
+            if (index === 12) return true; // Center is free
+            return game.markedNumbers.has(number);
         });
     }
     
     static checkXBingo() {
-        const cells = document.querySelectorAll('.cell');
-        if (cells.length !== 25) return false;
+        const game = GameManager.getInstance();
         
-        // Main diagonal
+        if (!game.isPlaying || !game.hasCard || game.cardNumbers.length !== 25) {
+            return false;
+        }
+        
+        // Main diagonal (top-left to bottom-right)
         for (let i = 0; i < 5; i++) {
             const index = i * 6;
-            if (index !== 12 && !cells[index].classList.contains('marked')) {
+            if (index === 12) continue; // Skip center
+            if (!game.markedNumbers.has(game.cardNumbers[index])) {
                 return false;
             }
         }
         
-        // Anti-diagonal
+        // Anti-diagonal (top-right to bottom-left)
         for (let i = 0; i < 5; i++) {
             const index = i * 4 + 4;
-            if (index !== 12 && !cells[index].classList.contains('marked')) {
+            if (index === 12) continue; // Skip center
+            if (!game.markedNumbers.has(game.cardNumbers[index])) {
                 return false;
             }
         }
@@ -85,10 +124,17 @@ class BingoPatterns {
     }
     
     static checkBlackout() {
-        const cells = document.querySelectorAll('.cell');
-        if (cells.length !== 25) return false;
+        const game = GameManager.getInstance();
         
-        return Array.from(cells).every(cell => cell.classList.contains('marked'));
+        if (!game.isPlaying || !game.hasCard || game.cardNumbers.length !== 25) {
+            return false;
+        }
+        
+        // All numbers including center (center is free so always marked)
+        return game.cardNumbers.every(number => {
+            if (number === 0) return true; // Center (FREE)
+            return game.markedNumbers.has(number);
+        });
     }
     
     static checkPattern(patternName) {
@@ -114,18 +160,19 @@ class BingoPatterns {
         return this.patterns[patternName] || null;
     }
     
+    static getPatternMultiplier(patternName) {
+        const pattern = this.patterns[patternName];
+        return pattern ? pattern.multiplier : 5;
+    }
+    
     static validatePattern(patternName) {
         if (!this.patterns[patternName]) {
-            throw new Error(`Invalid pattern: ${patternName}`);
+            console.error(`Invalid pattern: ${patternName}`);
+            return false;
         }
         return true;
     }
 }
 
-// Initialize and make available globally
-window.bingoPatterns = BingoPatterns;
-
-// Export for use in other files
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = BingoPatterns;
-}
+// Make globally available
+window.BingoPatterns = BingoPatterns;
