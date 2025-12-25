@@ -1,71 +1,90 @@
 // Quick Join Manager
 class QuickJoinManager {
     static init() {
+        console.log('Quick Join Manager initializing...');
         this.setupRecommendedNumbers();
+        return true;
     }
     
-    static async quickJoin() {
+    static setupRecommendedNumbers() {
+        // Mark some numbers as recommended after a delay
+        setTimeout(() => {
+            const hotNumbers = StatsManager.drawStats.hotNumbers || [];
+            const recommendedNumbers = hotNumbers.slice(0, 5).map(num => num.number);
+            
+            recommendedNumbers.forEach(num => {
+                const btn = document.getElementById(`num-${num}`);
+                if (btn && !btn.classList.contains('taken')) {
+                    btn.classList.add('recommended');
+                    btn.title = 'Recommended number (hot)';
+                    
+                    // Add visual indicator
+                    btn.style.position = 'relative';
+                    btn.style.boxShadow = '0 0 8px var(--accent)';
+                    
+                    const fireIcon = document.createElement('span');
+                    fireIcon.textContent = '🔥';
+                    fireIcon.style.position = 'absolute';
+                    fireIcon.style.top = '2px';
+                    fireIcon.style.right = '2px';
+                    fireIcon.style.fontSize = '0.6rem';
+                    btn.appendChild(fireIcon);
+                }
+            });
+        }, 2000);
+    }
+    
+    static quickJoin() {
         try {
-            const state = GameState.getInstance();
-            const session = GameSession;
+            const game = GameManager.getInstance();
             
             // Validate
-            if (state.isPlaying) {
+            if (game.isPlaying) {
                 UIManager.showNotification('Already in game!', 'error');
-                return;
+                return false;
             }
             
-            if (!session.sessionActive) {
-                UIManager.showNotification('Wait for next session', 'warning');
-                return;
+            if (game.currentPhase !== 'picking') {
+                UIManager.showNotification('Wait for join phase', 'warning');
+                return false;
             }
             
             // Find best available number
             const bestNumber = this.findBestAvailableNumber();
             if (!bestNumber) {
                 UIManager.showNotification('No numbers available', 'error');
-                return;
+                return false;
             }
             
             // Get best pattern
             const bestPattern = this.getBestPattern();
             
             // Calculate optimal wager
-            const optimalWager = this.calculateOptimalWager(state.balance);
+            const optimalWager = this.calculateOptimalWager(game.balance);
             
             // Show confirmation modal
-            const confirmed = await this.showQuickJoinModal({
+            this.showQuickJoinModal({
                 number: bestNumber,
                 pattern: bestPattern,
                 wager: optimalWager
             });
             
-            if (!confirmed) return;
-            
-            // Apply selections
-            state.selectedCenter = bestNumber;
-            state.currentPattern = bestPattern;
-            state.wager = optimalWager;
-            
-            // Generate card
-            UIManager.generateCard(bestNumber);
-            
-            // Join session
-            UIManager.joinSession();
-            
+            return true;
         } catch (error) {
-            ErrorHandler.showError(`Quick join failed: ${error.message}`);
+            console.error('Quick join error:', error);
+            UIManager.showNotification('Quick join failed', 'error');
+            return false;
         }
     }
     
     static findBestAvailableNumber() {
-        const session = GameSession;
+        const game = GameManager.getInstance();
         
         // Strategy 1: Look for hot numbers first
-        const hotNumbers = this.getHotNumbers();
-        for (const num of hotNumbers) {
-            if (!session.takenNumbers.has(num)) {
-                return num;
+        const hotNumbers = StatsManager.drawStats.hotNumbers || [];
+        for (const hotNum of hotNumbers) {
+            if (!game.takenNumbers.has(hotNum.number)) {
+                return hotNum.number;
             }
         }
         
@@ -78,7 +97,7 @@ class QuickJoinManager {
         for (const column of sortedColumns) {
             const range = BingoAnnouncer.getColumnRange(column);
             for (let i = range.min; i <= range.max; i++) {
-                if (!session.takenNumbers.has(i)) {
+                if (!game.takenNumbers.has(i)) {
                     return i;
                 }
             }
@@ -86,7 +105,7 @@ class QuickJoinManager {
         
         // Strategy 3: Random available number
         for (let i = 1; i <= 200; i++) {
-            if (!session.takenNumbers.has(i)) {
+            if (!game.takenNumbers.has(i)) {
                 return i;
             }
         }
@@ -94,65 +113,26 @@ class QuickJoinManager {
         return null;
     }
     
-    static getHotNumbers() {
-        // Simplified hot numbers logic
-        const hotNumbers = [];
-        for (let i = 0; i < 20; i++) {
-            hotNumbers.push(Math.floor(Math.random() * 200) + 1);
-        }
-        return hotNumbers;
-    }
-    
     static getColumnDensity() {
-        const session = GameSession;
+        const game = GameManager.getInstance();
         const density = { B: 0, I: 0, N: 0, G: 0, O: 0 };
         
-        session.takenNumbers.forEach(number => {
-            const letter = BingoAnnouncer.getLetterForNumber(number).letter;
-            density[letter]++;
+        game.takenNumbers.forEach(number => {
+            const letterInfo = BingoAnnouncer.getLetterForNumber(number);
+            if (letterInfo && letterInfo.letter) {
+                density[letterInfo.letter]++;
+            }
         });
         
         return density;
     }
     
     static getBestPattern() {
-        // Based on win rate statistics
+        // Based on win rate statistics and ease
         const patterns = ['line', 'four-corners', 'x', 'full-house', 'blackout'];
-        const winRates = {
-            'line': 0.3,
-            'four-corners': 0.2,
-            'x': 0.15,
-            'full-house': 0.1,
-            'blackout': 0.05
-        };
         
-        // Choose pattern with best balance of win rate and multiplier
-        let bestPattern = 'line';
-        let bestScore = 0;
-        
-        patterns.forEach(pattern => {
-            const multiplier = this.getPatternMultiplier(pattern);
-            const winRate = winRates[pattern] || 0.1;
-            const score = multiplier * winRate;
-            
-            if (score > bestScore) {
-                bestScore = score;
-                bestPattern = pattern;
-            }
-        });
-        
-        return bestPattern;
-    }
-    
-    static getPatternMultiplier(pattern) {
-        const multipliers = {
-            'line': 5,
-            'four-corners': 3,
-            'full-house': 10,
-            'x': 7,
-            'blackout': 15
-        };
-        return multipliers[pattern] || 5;
+        // Line is usually the best for beginners
+        return 'line';
     }
     
     static calculateOptimalWager(balance) {
@@ -169,43 +149,65 @@ class QuickJoinManager {
         return optimal;
     }
     
-    static async showQuickJoinModal(options) {
-        return new Promise((resolve) => {
-            // Update modal content
-            document.getElementById('quickJoinNumber').textContent = options.number;
-            document.getElementById('quickJoinPattern').textContent = options.pattern.toUpperCase();
-            document.getElementById('quickJoinWager').textContent = options.wager;
-            
-            // Calculate win chance
-            const winChance = this.calculateWinChance(options);
-            document.getElementById('quickJoinChance').textContent = winChance.text;
-            document.getElementById('quickJoinChance').style.color = winChance.color;
-            
-            // Show modal
-            const modal = document.getElementById('quickJoinModal');
+    static showQuickJoinModal(options) {
+        // Update modal content
+        const numberEl = document.getElementById('quickJoinNumber');
+        const patternEl = document.getElementById('quickJoinPattern');
+        const wagerEl = document.getElementById('quickJoinWager');
+        const chanceEl = document.getElementById('quickJoinChance');
+        
+        if (numberEl) numberEl.textContent = options.number;
+        if (patternEl) patternEl.textContent = options.pattern.toUpperCase();
+        if (wagerEl) wagerEl.textContent = options.wager;
+        
+        // Calculate win chance
+        const winChance = this.calculateWinChance(options);
+        if (chanceEl) {
+            chanceEl.textContent = winChance.text;
+            chanceEl.style.color = winChance.color;
+        }
+        
+        // Show modal
+        const modal = document.getElementById('quickJoinModal');
+        if (modal) {
             modal.classList.add('active');
-            
-            // Store resolve function
-            modal._resolve = resolve;
-        });
+        }
     }
     
     static confirmQuickJoin() {
         const modal = document.getElementById('quickJoinModal');
-        if (modal._resolve) {
-            modal._resolve(true);
-            modal._resolve = null;
+        if (!modal) return;
+        
+        // Get the selected options from modal
+        const number = parseInt(document.getElementById('quickJoinNumber').textContent);
+        const pattern = document.getElementById('quickJoinPattern').textContent.toLowerCase();
+        const wager = parseInt(document.getElementById('quickJoinWager').textContent);
+        
+        const game = GameManager.getInstance();
+        
+        // Apply selections
+        if (game.selectNumber(number)) {
+            game.setPattern(pattern);
+            game.setWager(wager);
+            
+            // Generate card
+            game.generateCard(number);
+            
+            // Join session
+            if (game.joinSession()) {
+                UIManager.showNotification('Quick join successful!', 'success');
+            }
         }
+        
+        // Close modal
         modal.classList.remove('active');
     }
     
     static closeQuickJoinModal() {
         const modal = document.getElementById('quickJoinModal');
-        if (modal._resolve) {
-            modal._resolve(false);
-            modal._resolve = null;
+        if (modal) {
+            modal.classList.remove('active');
         }
-        modal.classList.remove('active');
     }
     
     static calculateWinChance(options) {
@@ -255,25 +257,10 @@ class QuickJoinManager {
     }
     
     static joinWithRecommended() {
-        // Similar to quick join but with different strategy
+        // Quick join with recommended settings
         this.quickJoin();
-    }
-    
-    static setupRecommendedNumbers() {
-        // Mark some numbers as recommended
-        setTimeout(() => {
-            const recommendedNumbers = this.getHotNumbers().slice(0, 5);
-            recommendedNumbers.forEach(num => {
-                const btn = document.getElementById(`num-${num}`);
-                if (btn && !btn.classList.contains('taken')) {
-                    btn.classList.add('recommended');
-                    btn.title = 'Recommended number';
-                }
-            });
-        }, 1000);
     }
 }
 
 // Make globally available
 window.QuickJoinManager = QuickJoinManager;
-window.closeQuickJoinModal = QuickJoinManager.closeQuickJoinModal;
