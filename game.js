@@ -1,66 +1,75 @@
-// Game State Management
+// Game State Management - Singleton Pattern
 class GameManager {
     static instance = null;
     
     static getInstance() {
         if (!GameManager.instance) {
-            GameManager.instance = {
-                // Player state
-                balance: 1000,
-                wager: 50,
-                selectedNumber: null,
-                pattern: 'line',
-                isPlaying: false,
-                hasCard: false,
-                cardNumbers: [],
-                markedNumbers: new Set(),
-                sessionWon: false,
-                
-                // Session state
-                currentPhase: 'drawing', // 'drawing' or 'picking'
-                currentSession: 1,
-                drawsCompleted: 0,
-                maxDraws: 75,
-                drawnNumbers: [],
-                winners: [],
-                takenNumbers: new Set(),
-                activePlayers: 0,
-                
-                // Timer state
-                drawingTimer: null,
-                pickingTimer: null,
-                timeLeft: 60,
-                
-                // Call history
-                callHistory: []
-            };
+            GameManager.instance = new GameManager();
         }
         return GameManager.instance;
     }
     
-    static start() {
-        const state = this.getInstance();
-        
-        // Clear any existing timers
-        this.clearTimers();
-        
-        // Start the first drawing phase
-        this.startDrawingPhase();
+    constructor() {
+        this.resetState();
     }
     
-    static startDrawingPhase() {
-        const state = this.getInstance();
-        state.currentPhase = 'drawing';
-        state.drawsCompleted = 0;
-        state.drawnNumbers = [];
-        state.callHistory = [];
+    resetState() {
+        // Player state
+        this.balance = 1000;
+        this.wager = 50;
+        this.selectedNumber = null;
+        this.pattern = 'line';
+        this.isPlaying = false;
+        this.hasCard = false;
+        this.cardNumbers = [];
+        this.markedNumbers = new Set();
+        this.sessionWon = false;
+        
+        // Session state
+        this.currentPhase = 'drawing'; // 'drawing' or 'picking'
+        this.currentSession = 1;
+        this.drawsCompleted = 0;
+        this.maxDraws = 75;
+        this.drawnNumbers = [];
+        this.winners = [];
+        this.takenNumbers = new Set();
+        this.activePlayers = 0;
+        this.sessionId = `session_${Date.now()}`;
+        this.totalCards = 0;
+        
+        // Timer state
+        this.drawingTimer = null;
+        this.pickingTimer = null;
+        this.timeLeft = 60;
+        
+        // Call history
+        this.callHistory = [];
+    }
+    
+    static start() {
+        const instance = this.getInstance();
+        instance.clearTimers();
+        instance.startDrawingPhase();
+    }
+    
+    startDrawingPhase() {
+        this.currentPhase = 'drawing';
+        this.drawsCompleted = 0;
+        this.drawnNumbers = [];
+        this.callHistory = [];
+        this.sessionWon = false;
+        
+        // Clear any existing card
+        this.hasCard = false;
+        this.cardNumbers = [];
+        this.markedNumbers.clear();
         
         // Update UI
         UIManager.updatePhaseUI();
-        UIManager.updateCallDisplay('-', '-', 'Waiting...');
+        UIManager.updateCallDisplay('B', '-', 'Waiting...');
         
-        // Start drawing numbers (every 1 second)
-        state.drawingTimer = setInterval(() => {
+        // Start drawing numbers
+        this.drawingTimer = setInterval(() => {
             this.drawNumber();
         }, 1000);
         
@@ -71,34 +80,56 @@ class GameManager {
         // Show phase message
         document.getElementById('phaseMessage').innerHTML = `
             <div class="phase-icon">⏳</div>
-            <div class="phase-text">Numbers being drawn. Join next session in <span id="joinTimer">${state.timeLeft}</span>s</div>
+            <div class="phase-text">Numbers being drawn. Join next session in <span id="joinTimer">${this.timeLeft}</span>s</div>
         `;
+        
+        // Disable number selection
+        document.getElementById('numberSelectTitle').innerHTML = '🔒 Number Selection LOCKED';
+        document.getElementById('numberSelectSubtitle').innerHTML = 'Wait for join phase';
+        document.querySelector('.selector-box').classList.add('disabled');
+        document.querySelector('.numbers-scroll').classList.add('disabled');
+        document.getElementById('joinBtn').disabled = true;
     }
     
-    static drawNumber() {
-        const state = this.getInstance();
+    drawNumber() {
+        if (this.drawsCompleted >= this.maxDraws) {
+            this.endDrawingPhase();
+            return;
+        }
         
-        if (state.drawsCompleted >= state.maxDraws) {
+        // Check if all numbers are drawn (prevent infinite loop)
+        if (this.drawnNumbers.length >= 200) {
+            console.log('All numbers have been drawn!');
             this.endDrawingPhase();
             return;
         }
         
         // Generate unique number
         let number;
+        let attempts = 0;
+        const maxAttempts = 200;
+        
         do {
             number = Math.floor(Math.random() * 200) + 1;
-        } while (state.drawnNumbers.includes(number));
+            attempts++;
+            
+            if (attempts > maxAttempts) {
+                console.error('Failed to find unique number');
+                this.endDrawingPhase();
+                return;
+            }
+        } while (this.drawnNumbers.includes(number));
         
         // Add to drawn numbers
-        state.drawnNumbers.push(number);
-        state.drawsCompleted++;
+        this.drawnNumbers.push(number);
+        this.drawsCompleted++;
         
         // Get letter for this number
         const letter = this.getLetterForNumber(number);
-        const call = `${letter}${number}`;
+        const call = `${letter}-${number}`;
         
         // Add to call history
-        state.callHistory.unshift({
+        this.callHistory.unshift({
             call: call,
             letter: letter,
             number: number,
@@ -106,8 +137,8 @@ class GameManager {
         });
         
         // Keep only last 20 calls
-        if (state.callHistory.length > 20) {
-            state.callHistory.pop();
+        if (this.callHistory.length > 20) {
+            this.callHistory.pop();
         }
         
         // Update UI with announcement
@@ -126,15 +157,18 @@ class GameManager {
         UIManager.updateStats();
         
         // Update call counter
-        document.getElementById('callCounter').textContent = `#${state.drawsCompleted}`;
+        document.getElementById('callCounter').textContent = `#${this.drawsCompleted}`;
+        
+        // Record draw in stats
+        StatsManager.recordDraw(number);
         
         // If this is the last draw, end phase
-        if (state.drawsCompleted >= state.maxDraws) {
+        if (this.drawsCompleted >= this.maxDraws) {
             this.endDrawingPhase();
         }
     }
     
-    static getLetterForNumber(number) {
+    getLetterForNumber(number) {
         if (number <= 40) return 'B';
         if (number <= 80) return 'I';
         if (number <= 120) return 'N';
@@ -142,13 +176,11 @@ class GameManager {
         return 'O';
     }
     
-    static markPlayerCards(number) {
-        const state = this.getInstance();
-        
-        if (state.isPlaying && state.hasCard) {
+    markPlayerCards(number) {
+        if (this.isPlaying && this.hasCard) {
             // Check if this number is on player's card
-            if (state.cardNumbers.includes(number)) {
-                state.markedNumbers.add(number);
+            if (this.cardNumbers.includes(number)) {
+                this.markedNumbers.add(number);
                 UIManager.markCardCell(number);
                 
                 // Check if player won
@@ -157,127 +189,18 @@ class GameManager {
         }
     }
     
-    static checkPlayerWin() {
-        const state = this.getInstance();
-        
-        if (!state.isPlaying || !state.hasCard) return;
+    checkPlayerWin() {
+        if (!this.isPlaying || !this.hasCard) return;
         
         // Get pattern checker
-        const patternChecker = this.getPatternChecker(state.pattern);
+        const patternChecker = BingoPatterns.patterns[this.pattern]?.check;
         
-        if (patternChecker()) {
+        if (patternChecker && patternChecker()) {
             this.playerWins();
         }
     }
     
-    static getPatternChecker(pattern) {
-        const checkers = {
-            'line': () => this.checkLinePattern(),
-            'four-corners': () => this.checkFourCornersPattern(),
-            'full-house': () => this.checkFullHousePattern(),
-            'x': () => this.checkXPattern(),
-            'blackout': () => this.checkBlackoutPattern()
-        };
-        
-        return checkers[pattern] || checkers.line;
-    }
-    
-    static checkLinePattern() {
-        const state = this.getInstance();
-        const card = state.cardNumbers;
-        
-        // Check rows (BINGO card is 5x5)
-        for (let row = 0; row < 5; row++) {
-            let complete = true;
-            for (let col = 0; col < 5; col++) {
-                const index = row * 5 + col;
-                if (index === 12) continue; // Skip free space
-                if (!state.markedNumbers.has(card[index])) {
-                    complete = false;
-                    break;
-                }
-            }
-            if (complete) return true;
-        }
-        
-        // Check columns
-        for (let col = 0; col < 5; col++) {
-            let complete = true;
-            for (let row = 0; row < 5; row++) {
-                const index = row * 5 + col;
-                if (index === 12) continue;
-                if (!state.markedNumbers.has(card[index])) {
-                    complete = false;
-                    break;
-                }
-            }
-            if (complete) return true;
-        }
-        
-        return false;
-    }
-    
-    static checkFourCornersPattern() {
-        const state = this.getInstance();
-        const corners = [0, 4, 20, 24]; // Indices of corners
-        const card = state.cardNumbers;
-        
-        return corners.every(index => {
-            if (index === 12) return true; // Center is free
-            return state.markedNumbers.has(card[index]);
-        });
-    }
-    
-    static checkFullHousePattern() {
-        const state = this.getInstance();
-        const card = state.cardNumbers;
-        
-        // All 25 cells must be marked
-        return card.every((number, index) => {
-            if (index === 12) return true; // Center is always free
-            return state.markedNumbers.has(number);
-        });
-    }
-    
-    static checkXPattern() {
-        const state = this.getInstance();
-        const card = state.cardNumbers;
-        
-        // Main diagonal
-        for (let i = 0; i < 5; i++) {
-            const index = i * 6;
-            if (index === 12) continue; // Skip center
-            if (!state.markedNumbers.has(card[index])) {
-                return false;
-            }
-        }
-        
-        // Anti-diagonal
-        for (let i = 0; i < 5; i++) {
-            const index = i * 4 + 4;
-            if (index === 12) continue; // Skip center
-            if (!state.markedNumbers.has(card[index])) {
-                return false;
-            }
-        }
-        
-        return true;
-    }
-    
-    static checkBlackoutPattern() {
-        const state = this.getInstance();
-        const card = state.cardNumbers;
-        
-        // All numbers including center (center is free so always marked)
-        return card.every(number => {
-            if (number === 0) return true; // Center
-            return state.markedNumbers.has(number);
-        });
-    }
-    
-    static playerWins() {
-        const state = this.getInstance();
-        
+    playerWins() {
         // Calculate winnings
         const multipliers = {
             'line': 5,
@@ -287,83 +210,121 @@ class GameManager {
             'blackout': 15
         };
         
-        const multiplier = multipliers[state.pattern] || 5;
-        const winnings = state.wager * multiplier;
+        const multiplier = multipliers[this.pattern] || 5;
+        const winnings = this.wager * multiplier;
         
         // Add to balance
-        state.balance += winnings;
-        state.sessionWon = true;
-        state.isPlaying = false;
-        state.hasCard = false;
+        this.balance += winnings;
+        this.sessionWon = true;
+        this.isPlaying = false;
+        this.hasCard = false;
         
         // Add to winners list
-        state.winners.push({
+        this.winners.push({
             player: 'You',
-            number: state.selectedNumber,
-            pattern: state.pattern,
+            number: this.selectedNumber,
+            pattern: this.pattern,
             winnings: winnings,
-            draws: state.drawsCompleted
+            draws: this.drawsCompleted
         });
+        
+        // Record win in history
+        HistoryManager.addWinner({
+            player: 'You',
+            number: this.selectedNumber,
+            pattern: this.pattern,
+            winnings: winnings,
+            draws: this.drawsCompleted,
+            cardNumbers: this.cardNumbers
+        });
+        
+        // Record win in stats
+        StatsManager.recordPlayerWin(this.wager, winnings, this.pattern, this.drawsCompleted);
         
         // Show win modal
         UIManager.showWinModal(winnings);
         
         // Release the number
-        state.takenNumbers.delete(state.selectedNumber);
-        state.selectedNumber = null;
+        this.takenNumbers.delete(this.selectedNumber);
+        this.selectedNumber = null;
+        
+        // Update UI
+        UIManager.updateUI();
+        
+        // Update multiplayer
+        MultiplayerManager.updatePlayerStats({
+            wins: this.winners.length,
+            balance: this.balance
+        });
+    }
+    
+    checkWinners() {
+        // Simulate other winners (for multiplayer feel)
+        if (Math.random() < 0.02 && this.drawsCompleted > 30) {
+            this.winnersCount++;
+            this.activePlayers = Math.max(0, this.activePlayers - 1);
+            UIManager.updateStats();
+        }
+    }
+    
+    endDrawingPhase() {
+        // Clear drawing timer
+        clearInterval(this.drawingTimer);
+        
+        // Check if player lost
+        if (this.isPlaying && !this.sessionWon) {
+            this.playerLoses();
+        }
+        
+        // Start picking phase after delay
+        setTimeout(() => {
+            this.startPickingPhase();
+        }, 2000);
+    }
+    
+    playerLoses() {
+        this.isPlaying = false;
+        this.hasCard = false;
+        this.sessionWon = false;
+        
+        // Deduct wager
+        this.balance -= this.wager;
+        
+        // Record loss in history
+        HistoryManager.addGameRecord({
+            type: 'loss',
+            wager: this.wager,
+            pattern: this.pattern,
+            draws: this.drawsCompleted
+        });
+        
+        // Record loss in stats
+        StatsManager.recordPlayerLoss(this.wager);
+        
+        // Release the number
+        this.takenNumbers.delete(this.selectedNumber);
+        this.selectedNumber = null;
+        
+        // Clear marked numbers
+        this.markedNumbers.clear();
+        
+        // Show lose modal
+        UIManager.showLoseModal();
         
         // Update UI
         UIManager.updateUI();
     }
     
-    static checkWinners() {
-        const state = this.getInstance();
+    startPickingPhase() {
+        this.currentPhase = 'picking';
+        this.timeLeft = 60; // 60 seconds to pick numbers
         
-        // Simulate other winners (for multiplayer feel)
-        if (Math.random() < 0.02 && state.drawsCompleted > 30) {
-            state.winnersCount++;
-            state.activePlayers = Math.max(0, state.activePlayers - 1);
-            UIManager.updateStats();
-        }
-    }
-    
-    static endDrawingPhase() {
-        const state = this.getInstance();
-        
-        // Clear drawing timer
-        clearInterval(state.drawingTimer);
-        
-        // Check if player lost
-        if (state.isPlaying && !state.sessionWon) {
-            this.playerLoses();
-        }
-        
-        // Start picking phase
-        this.startPickingPhase();
-    }
-    
-    static playerLoses() {
-        const state = this.getInstance();
-        
-        state.isPlaying = false;
-        state.hasCard = false;
-        state.sessionWon = false;
-        
-        // Release the number
-        state.takenNumbers.delete(state.selectedNumber);
-        state.selectedNumber = null;
-        
-        // Clear marked numbers
-        state.markedNumbers.clear();
-        
-        // Show lose modal
-        UIManager.showLoseModal();
-    }
-    
-    static startPickingPhase() {
-        const state = this.getInstance();
-        state.currentPhase = 'picking';
-        state.timeLeft = 60; // 60 seconds to pick numbers
+        // Reset for new session
+        this.drawsCompleted = 0;
+        this.drawnNumbers = [];
+        this.callHistory = [];
+        this.sessionWon = false;
+        this.currentSession++;
         
         // Update UI
         UIManager.updatePhaseUI();
@@ -382,81 +343,69 @@ class GameManager {
         UIManager.showJoinPhaseModal();
         
         // Start picking timer
-        state.pickingTimer = setInterval(() => {
-            state.timeLeft--;
+        this.pickingTimer = setInterval(() => {
+            this.timeLeft--;
             
             // Update timers
-            document.getElementById('joinTimer').textContent = state.timeLeft;
-            document.getElementById('nextSessionTimer').textContent = this.formatTime(state.timeLeft);
-            document.getElementById('phaseTimer').textContent = state.timeLeft;
+            document.getElementById('joinTimer').textContent = this.timeLeft;
+            document.getElementById('nextSessionTimer').textContent = this.formatTime(this.timeLeft);
+            document.getElementById('phaseTimer').textContent = this.timeLeft;
             
-            if (state.timeLeft <= 10) {
+            if (this.timeLeft <= 10) {
                 // Warning: Last 10 seconds
                 document.getElementById('nextSessionTimer').style.color = 'var(--danger)';
             }
             
-            if (state.timeLeft <= 0) {
-                clearInterval(state.pickingTimer);
+            if (this.timeLeft <= 0) {
+                clearInterval(this.pickingTimer);
                 this.endPickingPhase();
             }
         }, 1000);
     }
     
-    static endPickingPhase() {
-        const state = this.getInstance();
-        
+    endPickingPhase() {
         // Disable number selection
         document.getElementById('numberSelectTitle').innerHTML = '🔒 Number Selection LOCKED';
         document.getElementById('numberSelectSubtitle').innerHTML = 'Wait for next join phase';
         document.querySelector('.selector-box').classList.add('disabled');
         document.querySelector('.numbers-scroll').classList.add('disabled');
-        
-        // Disable join button
         document.getElementById('joinBtn').disabled = true;
         
-        // Increment session number
-        state.currentSession++;
-        
-        // Reset for next session
-        state.sessionWon = false;
-        state.markedNumbers.clear();
-        state.callHistory = [];
+        // Hide join confirmation if visible
+        document.getElementById('joinConfirm').style.display = 'none';
         
         // Start new drawing phase
         setTimeout(() => {
             this.startDrawingPhase();
-        }, 2000); // 2 second delay before next draw
+        }, 2000);
     }
     
-    static formatTime(seconds) {
+    formatTime(seconds) {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
     
-    static clearTimers() {
-        const state = this.getInstance();
-        if (state.drawingTimer) clearInterval(state.drawingTimer);
-        if (state.pickingTimer) clearInterval(state.pickingTimer);
+    clearTimers() {
+        if (this.drawingTimer) clearInterval(this.drawingTimer);
+        if (this.pickingTimer) clearInterval(this.pickingTimer);
     }
     
-    static selectNumber(number) {
-        const state = this.getInstance();
-        
+    selectNumber(number) {
         // Can only select during picking phase
-        if (state.currentPhase !== 'picking') {
+        if (this.currentPhase !== 'picking') {
             UIManager.showNotification('Can only pick numbers during join phase!', 'error');
             return false;
         }
         
         // Check if number is available
-        if (state.takenNumbers.has(number)) {
+        if (this.takenNumbers.has(number)) {
             UIManager.showNotification('Number already taken!', 'error');
             return false;
         }
         
         // Select the number
-        state.selectedNumber = number;
+        this.selectedNumber = number;
         
         // Generate card
         this.generateCard(number);
@@ -466,80 +415,90 @@ class GameManager {
         
         // Update confirmation display
         document.getElementById('confirmNumber').textContent = number;
-        document.getElementById('confirmPattern').textContent = state.pattern.toUpperCase();
-        document.getElementById('confirmWager').textContent = state.wager;
+        document.getElementById('confirmPattern').textContent = this.pattern.toUpperCase();
+        document.getElementById('confirmWager').textContent = this.wager;
         
         return true;
     }
     
-    static generateCard(centerNumber) {
-        const state = this.getInstance();
+    generateCard(centerNumber) {
+        // Generate 25 unique numbers around the center
+        const numbers = new Set();
+        const range = 12; // 12 numbers on each side
         
-        // Generate 25 numbers around the center
-        const numbers = [];
-        for (let i = -12; i <= 12; i++) {
-            let num = centerNumber + i;
+        // Add center as FREE
+        numbers.add(0);
+        
+        // Generate numbers ensuring uniqueness
+        while (numbers.size < 25) {
+            const offset = Math.floor(Math.random() * (range * 2 + 1)) - range;
+            let num = centerNumber + offset;
             
             // Wrap around 1-200
             if (num < 1) num = 200 + num;
             if (num > 200) num = num - 200;
             
-            numbers.push(num);
+            numbers.add(num);
         }
         
-        // Set center (index 12) to 0 to mark as FREE
-        numbers[12] = 0;
-        
-        state.cardNumbers = numbers;
+        this.cardNumbers = Array.from(numbers);
         
         // Update card display
-        UIManager.updateCard(numbers);
+        UIManager.updateCard(this.cardNumbers);
     }
     
-    static joinNextSession() {
-        const state = this.getInstance();
-        
+    joinSession() {
         // Validation
-        if (state.currentPhase !== 'picking') {
+        if (this.currentPhase !== 'picking') {
             UIManager.showNotification('Can only join during join phase!', 'error');
             return false;
         }
         
-        if (!state.selectedNumber) {
+        if (!this.selectedNumber) {
             UIManager.showNotification('Please select a number first!', 'error');
             return false;
         }
         
-        if (state.takenNumbers.has(state.selectedNumber)) {
+        if (this.takenNumbers.has(this.selectedNumber)) {
             UIManager.showNotification('Number already taken!', 'error');
             return false;
         }
         
-        if (state.balance < state.wager) {
+        if (this.balance < this.wager) {
             UIManager.showNotification('Insufficient balance!', 'error');
             return false;
         }
         
         // Deduct wager
-        state.balance -= state.wager;
+        this.balance -= this.wager;
         
         // Take the number
-        state.takenNumbers.add(state.selectedNumber);
+        this.takenNumbers.add(this.selectedNumber);
         
         // Set player state
-        state.isPlaying = true;
-        state.hasCard = true;
-        state.sessionWon = false;
+        this.isPlaying = true;
+        this.hasCard = true;
+        this.sessionWon = false;
         
         // Mark free space
-        state.markedNumbers.add(0);
+        this.markedNumbers.add(0);
         
         // Update stats
-        state.activePlayers++;
+        this.activePlayers++;
+        this.totalCards = this.takenNumbers.size;
+        
+        // Record join in history
+        HistoryManager.addGameRecord({
+            type: 'join',
+            number: this.selectedNumber,
+            wager: this.wager,
+            pattern: this.pattern,
+            timestamp: Date.now()
+        });
         
         // Update UI
         UIManager.updateUI();
-        UIManager.showNotification(`Joined with number ${state.selectedNumber}!`, 'success');
+        UIManager.showNotification(`Joined with number ${this.selectedNumber}!`, 'success');
         
         // Hide confirmation
         document.getElementById('joinConfirm').style.display = 'none';
@@ -547,26 +506,40 @@ class GameManager {
         return true;
     }
     
-    static setPattern(pattern) {
-        const state = this.getInstance();
-        state.pattern = pattern;
+    setPattern(pattern) {
+        if (!BingoPatterns.patterns[pattern]) {
+            console.error(`Invalid pattern: ${pattern}`);
+            return false;
+        }
+        
+        this.pattern = pattern;
         return true;
     }
     
-    static setWager(amount) {
-        const state = this.getInstance();
-        
+    setWager(amount) {
         // Validate wager
         if (amount < 10 || amount > 500) {
             return false;
         }
         
-        if (amount > state.balance) {
+        if (amount > this.balance) {
             return false;
         }
         
-        state.wager = amount;
+        this.wager = amount;
         return true;
+    }
+    
+    // Static helper methods
+    static getLetterColor(letter) {
+        const colors = {
+            'B': '#3b82f6',
+            'I': '#6366f1',
+            'N': '#10b981',
+            'G': '#f59e0b',
+            'O': '#ef4444'
+        };
+        return colors[letter] || '#94a3b8';
     }
 }
 
