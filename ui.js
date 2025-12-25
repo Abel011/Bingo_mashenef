@@ -156,23 +156,41 @@ class UIManager {
     }
     
     static updateCard(numbers) {
-        const grid = document.getElementById('cardGrid');
-        if (!grid || !numbers || numbers.length !== 25) return;
+    const grid = document.getElementById('cardGrid');
+    if (!grid || !numbers || numbers.length !== 25) return;
+    
+    // Clear existing cells
+    grid.innerHTML = '';
+    
+    for (let i = 0; i < 25; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
         
-        const cells = grid.querySelectorAll('.cell:not([data-number="0"])');
-        
-        numbers.forEach((number, index) => {
-            if (index < cells.length && number !== 0) {
-                const cell = cells[index];
-                cell.textContent = number;
-                cell.dataset.number = number;
-                
-                // Color by letter
-                const letter = this.getLetterForNumber(number);
-                cell.style.borderTop = `3px solid ${GameManager.getLetterColor(letter)}`;
+        if (i === 12) { // Center (FREE)
+            cell.textContent = 'FREE';
+            cell.style.background = 'var(--accent)';
+            cell.style.color = 'white';
+            cell.classList.add('marked');
+            cell.dataset.number = '0';
+        } else {
+            const number = numbers[i];
+            cell.textContent = number;
+            cell.dataset.number = number;
+            
+            // Color by letter
+            const letter = this.getLetterForNumber(number);
+            cell.style.borderTop = `3px solid ${GameManager.getLetterColor(letter)}`;
+            
+            // Check if this number is already marked (from previous session)
+            const game = GameManager.getInstance();
+            if (game.markedNumbers.has(number)) {
+                cell.classList.add('marked');
             }
-        });
+        }
+        
+        grid.appendChild(cell);
     }
+}
     
     static markCardCell(number) {
         const cells = document.querySelectorAll('.cell[data-number]');
