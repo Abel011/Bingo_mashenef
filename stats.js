@@ -1,34 +1,43 @@
 // Statistics and Analytics Manager
 class StatsManager {
-    static drawStats = {
-        totalDraws: 0,
-        numberFrequency: {},
-        timeBasedFrequency: {},
-        recentDraws: [],
-        sessionStats: [],
-        hotNumbers: []
-    };
-    
-    static playerStats = {
-        gamesPlayed: 0,
-        gamesWon: 0,
-        totalWagered: 0,
-        totalWon: 0,
-        favoritePattern: null,
-        bestWin: 0
-    };
-    
-    static timeWindows = {
-        '1h': 60 * 60 * 1000,
-        '3h': 3 * 60 * 60 * 1000,
-        '6h': 6 * 60 * 60 * 1000,
-        '24h': 24 * 60 * 60 * 1000
-    };
-    
     static init() {
+        console.log('Stats Manager initializing...');
+        
+        // Initialize stats if not exists
+        if (!this.drawStats) {
+            this.drawStats = {
+                totalDraws: 0,
+                numberFrequency: {},
+                timeBasedFrequency: {},
+                recentDraws: [],
+                sessionStats: [],
+                hotNumbers: []
+            };
+        }
+        
+        if (!this.playerStats) {
+            this.playerStats = {
+                gamesPlayed: 0,
+                gamesWon: 0,
+                totalWagered: 0,
+                totalWon: 0,
+                favoritePattern: null,
+                bestWin: 0
+            };
+        }
+        
+        this.timeWindows = {
+            '1h': 60 * 60 * 1000,
+            '3h': 3 * 60 * 60 * 1000,
+            '6h': 6 * 60 * 60 * 1000,
+            '24h': 24 * 60 * 60 * 1000
+        };
+        
         this.loadStats();
         this.setupAutoUpdate();
         this.initializeHotNumbers();
+        
+        return true;
     }
     
     static loadStats() {
@@ -38,6 +47,7 @@ class StatsManager {
                 const parsed = JSON.parse(savedStats);
                 this.drawStats = { ...this.drawStats, ...parsed.drawStats };
                 this.playerStats = { ...this.playerStats, ...parsed.playerStats };
+                console.log('Stats loaded from storage');
             }
         } catch (error) {
             console.error('Failed to load stats:', error);
@@ -76,11 +86,13 @@ class StatsManager {
         }
         
         const now = Date.now();
+        const game = GameManager.getInstance();
+        
         const drawRecord = {
             number: number,
             timestamp: now,
-            sessionId: GameSession.sessionId,
-            drawCount: GameSession.drawCount
+            sessionId: game.sessionId,
+            drawCount: game.drawsCompleted
         };
         
         // Update frequency
@@ -97,11 +109,10 @@ class StatsManager {
         const hour = new Date(now).getHours();
         this.drawStats.timeBasedFrequency[hour] = (this.drawStats.timeBasedFrequency[hour] || 0) + 1;
         
-        // Update hot numbers
-        this.updateHotNumbers();
-        
-        // Save stats
-        this.saveStats();
+        // Update hot numbers periodically
+        if (this.drawStats.totalDraws % 10 === 0) {
+            this.updateHotNumbers();
+        }
     }
     
     static updateHotNumbers() {
@@ -124,110 +135,20 @@ class StatsManager {
             .map(([number, count]) => ({
                 number: parseInt(number),
                 count: count,
-                frequency: count / recentDraws.length
+                frequency: count / Math.max(1, recentDraws.length)
             }))
             .sort((a, b) => b.count - a.count)
             .slice(0, 10); // Top 10 hot numbers
         
         this.drawStats.hotNumbers = hotNumbers;
         
-        // Update UI
-        this.displayHotNumbers();
-        
         return hotNumbers;
     }
     
-    static displayHotNumbers() {
-        const container = document.getElementById('hotNumbers');
-        if (!container) return;
-        
-        const hotNumbers = this.drawStats.hotNumbers;
-        
-        if (hotNumbers.length === 0) {
-            container.innerHTML = '<div class="no-hot-numbers">No data yet</div>';
-            return;
-        }
-        
-        let html = '';
-        hotNumbers.forEach((hotNumber, index) => {
-            const isHottest = index === 0;
-            const frequencyPercent = (hotNumber.frequency * 100).toFixed(1);
-            
-            html += `
-                <div class="hot-number ${isHottest ? 'hottest' : ''}" 
-                     data-frequency="${frequencyPercent}%"
-                     title="Drawn ${hotNumber.count} times (${frequencyPercent}%)">
-                    ${hotNumber.number}
-                </div>
-            `;
-        });
-        
-        container.innerHTML = html;
-        
-        // Update time display
-        const timeDisplay = document.getElementById('hotNumbersTime');
-        if (timeDisplay) {
-            timeDisplay.textContent = 'Updated now';
-        }
-    }
-    
-    static displayHotNumbersAnalysis() {
-        const container = document.getElementById('hotNumbersAnalysis');
-        if (!container) return;
-        
-        const hotNumbers = this.drawStats.hotNumbers.slice(0, 20); // Top 20
-        
-        if (hotNumbers.length === 0) {
-            container.innerHTML = '<div class="no-analysis">No analysis data yet</div>';
-            return;
-        }
-        
-        let html = '';
-        hotNumbers.forEach((hotNumber, index) => {
-            const probability = (hotNumber.frequency * 100).toFixed(1);
-            const isHot = index < 5;
-            
-            html += `
-                <div class="hot-number-stat ${isHot ? 'hottest' : ''}">
-                    <div class="hot-number-value">${hotNumber.number}</div>
-                    <div class="hot-number-prob">${probability}%</div>
-                </div>
-            `;
-        });
-        
-        container.innerHTML = html;
-        
-        // Update probability info
-        this.updateProbabilityInfo();
-    }
-    
-    static updateProbabilityInfo() {
-        const hotNumbers = this.drawStats.hotNumbers;
-        
-        if (hotNumbers.length === 0) {
-            document.getElementById('nextNumberProb').textContent = '0%';
-            document.getElementById('avgDrawsWin').textContent = '0';
-            return;
-        }
-        
-        // Calculate next number probability (weighted average)
-        const totalFrequency = hotNumbers.reduce((sum, num) => sum + num.frequency, 0);
-        const avgProbability = totalFrequency > 0 ? 
-            (totalFrequency / hotNumbers.length * 100).toFixed(1) : '0';
-        
-        // Calculate average draws to win (based on pattern statistics)
-        const history = HistoryManager.getWinStats();
-        const avgDraws = history.totalGames > 0 ? 
-            Math.round(GameSession.maxDraws * 0.6) : 35; // Estimated
-        
-        document.getElementById('nextNumberProb').textContent = `${avgProbability}%`;
-        document.getElementById('avgDrawsWin').textContent = avgDraws;
-    }
-    
     static initializeHotNumbers() {
-        // Initialize with some random data for demonstration
+        // Initialize with some random data for demonstration if empty
         if (this.drawStats.totalDraws === 0) {
-            for (let i = 0; i < 100; i++) {
+            for (let i = 0; i < 50; i++) {
                 const randomNumber = Math.floor(Math.random() * 200) + 1;
                 this.recordDraw(randomNumber);
             }
@@ -259,7 +180,7 @@ class StatsManager {
     }
     
     static updateFavoritePattern(pattern) {
-        // In a real implementation, track pattern frequency
+        // Simple favorite pattern tracking
         this.playerStats.favoritePattern = pattern;
     }
     
@@ -279,16 +200,22 @@ class StatsManager {
     }
     
     static displayStatistics() {
-        const playerStats = this.getPlayerStats();
-        const drawStats = this.drawStats;
-        
-        // Update stats display
-        document.getElementById('totalGames').textContent = playerStats.gamesPlayed;
-        document.getElementById('totalWins').textContent = playerStats.gamesWon;
-        document.getElementById('winRate').textContent = `${playerStats.winRate}%`;
-        document.getElementById('totalWagered').textContent = playerStats.totalWagered.toLocaleString();
-        
-        // Additional stats could be added here
+        try {
+            const playerStats = this.getPlayerStats();
+            
+            // Update stats display if elements exist
+            const totalGamesEl = document.getElementById('totalGames');
+            const totalWinsEl = document.getElementById('totalWins');
+            const winRateEl = document.getElementById('winRate');
+            const totalWageredEl = document.getElementById('totalWagered');
+            
+            if (totalGamesEl) totalGamesEl.textContent = playerStats.gamesPlayed;
+            if (totalWinsEl) totalWinsEl.textContent = playerStats.gamesWon;
+            if (winRateEl) winRateEl.textContent = `${playerStats.winRate}%`;
+            if (totalWageredEl) totalWageredEl.textContent = playerStats.totalWagered.toLocaleString();
+        } catch (error) {
+            console.error('Error displaying statistics:', error);
+        }
     }
     
     static getNumberPrediction() {
@@ -377,7 +304,5 @@ class StatsManager {
 // Initialize Stats Manager
 StatsManager.init();
 
-// Export for use in other files
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = StatsManager;
-}
+// Make globally available
+window.StatsManager = StatsManager;
