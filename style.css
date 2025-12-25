@@ -997,3 +997,194 @@ body {
 .color-n { color: var(--n-col); background: var(--n-col); }
 .color-g { color: var(--g-col); background: var(--g-col); }
 .color-o { color: var(--o-col); background: var(--o-col); }
+
+
+
+/*here i added new code*/
+/* Add to existing style.css */
+
+/* Connection Status */
+.connection-status {
+    font-size: 0.7rem;
+    padding: 4px 8px;
+    border-radius: 12px;
+    background: var(--secondary);
+    color: white;
+    font-weight: bold;
+}
+
+.connection-status.disconnected {
+    background: var(--danger);
+}
+
+/* Notifications */
+.notification {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    z-index: 1001;
+    animation: slideIn 0.3s ease-out;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.notification.success {
+    background: var(--secondary);
+    color: white;
+}
+
+.notification.error {
+    background: var(--danger);
+    color: white;
+}
+
+.notification.info {
+    background: var(--primary);
+    color: white;
+}
+
+.notification.warning {
+    background: var(--warning);
+    color: var(--bg-color);
+}
+
+/* Hot Numbers */
+.hot-number {
+    display: inline-block;
+    padding: 6px 10px;
+    margin: 3px;
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid var(--danger);
+    border-radius: 6px;
+    font-weight: bold;
+    color: var(--danger);
+    position: relative;
+}
+
+.hot-number.hottest {
+    background: rgba(239, 68, 68, 0.4);
+    border-color: #ff0000;
+    transform: scale(1.1);
+}
+
+.hot-number::after {
+    content: attr(data-frequency);
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    font-size: 0.6rem;
+    background: var(--danger);
+    color: white;
+    padding: 1px 4px;
+    border-radius: 4px;
+}
+
+/* Quick Join Modal Details */
+.quick-join-details {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 15px;
+    margin: 20px 0;
+}
+
+.quick-join-details div {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.quick-join-details div:last-child {
+    border-bottom: none;
+}
+
+.quick-join-details span:first-child {
+    color: var(--text-dim);
+}
+
+.quick-join-details span:last-child {
+    color: var(--text-main);
+    font-weight: bold;
+}
+
+/* History Items */
+.history-item {
+    padding: 10px;
+    margin: 5px 0;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    border-left: 3px solid var(--primary);
+}
+
+.history-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+}
+
+.history-rank {
+    font-weight: bold;
+    color: var(--accent);
+}
+
+.history-time {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+}
+
+.history-details {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.history-pattern {
+    color: var(--text-main);
+    font-size: 0.9rem;
+}
+
+.history-winnings {
+    color: var(--secondary);
+    font-weight: bold;
+}
+
+/* No Data States */
+.no-history, .no-hot-numbers, .no-analysis {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-dim);
+    font-style: italic;
+}
+
+/* Modal Cancel Button */
+.modal-btn.cancel {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-main);
+    border: 1px solid var(--glass-border);
+    margin-top: 10px;
+}
+
+.modal-btn.cancel:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Animation for marked cells */
+@keyframes markCell {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+.cell.marked {
+    animation: markCell 0.3s ease-out;
+}
+
+/* Recommended number styling */
+.num-btn.recommended {
+    position: relative;
+    box-shadow: 0 0 8px var(--accent);
+    border: 2px solid var(--accent);
+}
