@@ -177,17 +177,31 @@ class GameManager {
     }
     
     markPlayerCards(number) {
-        if (this.isPlaying && this.hasCard) {
-            // Check if this number is on player's card
-            if (this.cardNumbers.includes(number)) {
-                this.markedNumbers.add(number);
-                UIManager.markCardCell(number);
-                
-                // Check if player won
-                this.checkPlayerWin();
-            }
+    if (this.isPlaying && this.hasCard) {
+        // Check if this number is on player's card
+        const cardIndex = this.cardNumbers.findIndex(n => n === number);
+        if (cardIndex !== -1) {
+            this.markedNumbers.add(number);
+            
+            // Get the cell element and mark it
+            const cells = document.querySelectorAll('.cell[data-number]');
+            cells.forEach(cell => {
+                if (parseInt(cell.dataset.number) === number) {
+                    cell.classList.add('marked');
+                    
+                    // Add animation effect
+                    cell.style.animation = 'markCell 0.5s ease-out';
+                    setTimeout(() => {
+                        cell.style.animation = '';
+                    }, 500);
+                }
+            });
+            
+            // Check if player won
+            this.checkPlayerWin();
         }
     }
+                        }
     
     checkPlayerWin() {
         if (!this.isPlaying || !this.hasCard) return;
